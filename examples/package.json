@@ -1,0 +1,25 @@
+{
+  "name": "micro-sol-examples",
+  "private": true,
+  "version": "0.1.0",
+  "files": [],
+  "type": "module",
+  "main": "lib/index.js",
+  "module": "lib/esm/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./lib/esm/index.js",
+      "default": "./lib/index.js"
+    },
+    "./index.d.ts": "./lib/index.d.ts"
+  },
+  "scripts": {
+    "build": "tsc -d && tsc -p tsconfig.esm.json",
+    "lint": "prettier --check index.ts",
+    "test": "node test/index.js"
+  },
+  "dependencies": {
+    "micro-sol-signer": "file:.."
+  }
+}

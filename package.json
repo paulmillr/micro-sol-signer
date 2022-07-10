@@ -1,0 +1,55 @@
+{
+  "name": "micro-sol-signer",
+  "version": "0.1.0",
+  "description": "Create, sign & decode Solana transactions with minimum deps",
+  "files": [
+    "lib/index.js",
+    "lib/esm/index.js",
+    "lib/esm/package.json",
+    "lib/index.d.ts"
+  ],
+  "type": "module",
+  "main": "index.js",
+  "module": "index.js",
+  "types": "index.d.ts",
+  "dependencies": {
+    "@noble/ed25519": "~1.5.2",
+    "@noble/hashes": "~1.1.1",
+    "@scure/base": "~1.1.0",
+    "micro-packed": "~0.1.0"
+  },
+  "devDependencies": {
+    "micro-should": "0.2.0",
+    "prettier": "2.6.2",
+    "typescript": "4.7.3"
+  },
+  "author": "Paul Miller (https://paulmillr.com)",
+  "license": "MIT",
+  "homepage": "https://github.com/paulmillr/micro-otp",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/paulmillr/micro-otp.git"
+  },
+  "scripts": {
+    "build": "tsc",
+    "lint": "prettier --check index.ts",
+    "test": "node test/index.test.js"
+  },
+  "keywords": [
+    "solana",
+    "sol",
+    "web3",
+    "sign",
+    "signer",
+    "tx",
+    "transaction",
+    "address",
+    "token"
+  ],
+  "funding": [
+    {
+      "type": "individual",
+      "url": "https://paulmillr.com/funding/"
+    }
+  ]
+}
