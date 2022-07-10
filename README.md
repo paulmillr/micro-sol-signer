@@ -6,7 +6,12 @@ Create, sign & decode Solana transactions with minimum deps.
 - No network code in main package: allows simpler audits and offline usage
 - Can be used for transaction decoding in offline wallet. Solana web node could decode transactions, but can we trust it?
 
-Also, check out: [micro-eth-signer](https://github.com/paulmillr/micro-eth-signer)
+Check out all web3 utility libraries:
+
+- [micro-eth-signer](https://github.com/paulmillr/micro-eth-signer)
+- [micro-sol-signer](https://github.com/paulmillr/micro-sol-signer)
+- [micro-web3](https://github.com/paulmillr/micro-web3)
+- [tx-tor-broadcaster](https://github.com/paulmillr/tx-tor-broadcaster)
 
 ## Usage
 
