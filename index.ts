@@ -4,50 +4,8 @@ import { sha256 } from '@noble/hashes/sha256';
 import * as P from 'micro-packed';
 
 export type Bytes = Uint8Array;
-
-export function formatDecimal(n: bigint, precision: number): string {
-  let s = (n < 0n ? -n : n).toString(10);
-  let sep = s.length - precision;
-  if (sep < 0) {
-    s = s.padStart(s.length - sep, '0');
-    sep = 0;
-  }
-  let i = s.length - 1;
-  for (; i >= sep && s[i] === '0'; i--);
-  let [int, frac] = [s.slice(0, sep), s.slice(sep, i + 1)];
-  if (!int) int = '0';
-  if (n < 0n) int = '-' + int;
-  if (!frac) return int;
-  return `${int}.${frac}`;
-}
-
-export function parseDecimal(s: string, precision: number): bigint {
-  let neg = false;
-  if (s.startsWith('-')) {
-    neg = true;
-    s = s.slice(1);
-  }
-  let sep = s.indexOf('.');
-  sep = sep === -1 ? s.length : sep;
-  const [intS, fracS] = [s.slice(0, sep), s.slice(sep + 1)];
-  const int = BigInt(intS) * 10n ** BigInt(precision);
-  const fracLen = Math.min(fracS.length, precision);
-  const frac = BigInt(fracS.slice(0, fracLen)) * 10n ** BigInt(precision - fracLen);
-  const value = int + frac;
-  return neg ? -value : value;
-}
-
-export function concatBytes(...arrays: Uint8Array[]): Uint8Array {
-  if (arrays.length === 1) return arrays[0];
-  const length = arrays.reduce((a, arr) => a + arr.length, 0);
-  const result = new Uint8Array(length);
-  for (let i = 0, pad = 0; i < arrays.length; i++) {
-    const arr = arrays[i];
-    result.set(arr, pad);
-    pad += arr.length;
-  }
-  return result;
-}
+export const PRECISION = 9;
+export const Decimal = P.coders.decimal(PRECISION);
 
 // first bit -- terminator (1 -- continue, 0 -- last)
 export const shortVec = P.wrap({
@@ -68,8 +26,6 @@ export const shortVec = P.wrap({
     return len;
   },
 });
-
-export const SOL_PRECISION = 9;
 
 const rustString = P.string(P.padRight(8, P.U32LE, undefined));
 const pubKey = P.bytesFormatted(32, 'base58');
@@ -304,9 +260,8 @@ export const sys = defineProgram(SYS_PROGRAM, P.U32LE, {
       space: bigint;
       owner: string;
     }) =>
-      `Create new account=${o.newAccount} with balance of ${formatDecimal(
-        o.lamports,
-        SOL_PRECISION
+      `Create new account=${o.newAccount} with balance of ${Decimal.encode(
+        o.lamports
       )} and owner program ${o.owner}, using funding account ${o.source}`,
   },
   assign: {
@@ -319,9 +274,7 @@ export const sys = defineProgram(SYS_PROGRAM, P.U32LE, {
     coder: P.struct({ lamports: P.U64LE }),
     keys: { source: { sign: true, write: true }, destination: { sign: false, write: true } },
     hint: (o: { lamports: bigint; source: string; destination: string }) =>
-      `Transfer ${formatDecimal(o.lamports, SOL_PRECISION)} SOL from ${o.source} to ${
-        o.destination
-      }`,
+      `Transfer ${Decimal.encode(o.lamports)} SOL from ${o.source} to ${o.destination}`,
   },
   createAccountWithSeed: {
     coder: P.struct({
@@ -362,9 +315,9 @@ export const sys = defineProgram(SYS_PROGRAM, P.U32LE, {
       nonceAccount: string;
       nonceAuthority: string;
     }) =>
-      `Withdraw ${formatDecimal(o.lamports, SOL_PRECISION)} SOL from nonce account=${
-        o.nonceAccount
-      } (owner: ${o.nonceAuthority}) to ${o.destination}`,
+      `Withdraw ${Decimal.encode(o.lamports)} SOL from nonce account=${o.nonceAccount} (owner: ${
+        o.nonceAuthority
+      }) to ${o.destination}`,
   },
   initializeNonce: {
     coder: P.struct({ nonceAuthority: pubKey }),
@@ -595,7 +548,7 @@ export const token = defineProgram(TOKEN_PROGRAM, P.U8, {
       },
       tl: TokenList
     ) =>
-      `Transfer ${formatDecimal(o.amount, o.decimals)} ${tokenName(
+      `Transfer ${P.coders.decimal(o.decimals).encode(o.amount)} ${tokenName(
         o.mint,
         tl
       )} from token account=${o.source} of owner=${o.owner} to ${o.destination}`,
@@ -621,7 +574,7 @@ export const token = defineProgram(TOKEN_PROGRAM, P.U8, {
     ) =>
       `Approve delgate=${o.delegate} authority on behalf account=${o.source} owner=${
         o.owner
-      } over ${formatDecimal(o.amount, o.decimals)} ${tokenName(o.mint, tl)}`,
+      } over ${P.coders.decimal(o.decimals).encode(o.amount)} ${tokenName(o.mint, tl)}`,
   },
   mintToChecked: {
     coder: P.struct({ amount: P.U64LE, decimals: P.U8 }),
@@ -640,7 +593,7 @@ export const token = defineProgram(TOKEN_PROGRAM, P.U8, {
       },
       tl: TokenList
     ) =>
-      `Mint new tokens (${formatDecimal(o.amount, o.decimals)} ${tokenName(
+      `Mint new tokens (${P.coders.decimal(o.decimals).encode(o.amount)} ${tokenName(
         o.mint,
         tl
       )}) to account=${o.dest} using authority=${o.authority}`,
@@ -662,9 +615,10 @@ export const token = defineProgram(TOKEN_PROGRAM, P.U8, {
       },
       tl: TokenList
     ) =>
-      `Burn tokens (${formatDecimal(o.amount, o.decimals)} ${tokenName(o.mint, tl)}) on account=${
-        o.account
-      } of owner=${o.owner}`,
+      `Burn tokens (${P.coders.decimal(o.decimals).encode(o.amount)} ${tokenName(
+        o.mint,
+        tl
+      )}) on account=${o.account} of owner=${o.owner}`,
   },
   initializeAccount2: {
     coder: P.struct({ owner: pubKey }),
@@ -715,9 +669,9 @@ export function isOnCurve(bytes: Bytes | string) {
 }
 
 export function programAddress(program: string, ...seeds: Bytes[]) {
-  let seed = concatBytes(...seeds);
+  let seed = P.concatBytes(...seeds);
   const noncePos = seed.length;
-  seed = concatBytes(
+  seed = P.concatBytes(
     seed,
     new Uint8Array([0]),
     base58.decode(program),
@@ -814,7 +768,7 @@ export async function getAddress(privateKey: Bytes) {
 
 export async function formatPrivate(privateKey: Bytes) {
   const publicKey = await ed25519.getPublicKey(privateKey);
-  return base58.encode(concatBytes(privateKey, publicKey));
+  return base58.encode(P.concatBytes(privateKey, publicKey));
 }
 
 export function createTxComplex(address: string, instructions: Instruction[], blockhash: string) {
@@ -828,7 +782,7 @@ export function createTxComplex(address: string, instructions: Instruction[], bl
 }
 
 export function createTx(from: string, to: string, amount: string, fee: bigint, blockhash: string) {
-  const amountNum = parseDecimal(amount, SOL_PRECISION);
+  const amountNum = Decimal.decode(amount);
   return createTxComplex(
     from,
     [sys.transfer({ source: from, destination: to, lamports: amountNum })],
