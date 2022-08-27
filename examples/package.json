@@ -20,6 +20,5 @@
     "test": "node test/index.js"
   },
   "dependencies": {
-    "micro-sol-signer": "file:.."
   }
 }
