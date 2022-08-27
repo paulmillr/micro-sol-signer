@@ -16,7 +16,27 @@ Create, sign & decode Solana transactions with minimum deps.
 import * as sol from 'micro-sol-signer';
 ```
 
-Specific features:
+### Overview
+
+Summary of exported functions:
+
+```ts
+async function formatPrivate(privateKey: Bytes);
+async function getAddress(privateKey: Bytes);
+async function signTx(privateKey: Bytes, data: TxData): Promise<[string, string]>;
+async function verifyTx(tx: TxData);
+function createTx(from: string, to: string, amount: string, fee: bigint, blockhash: string);
+function createTxComplex(address: string, instructions: Instruction[], blockhash: string);
+function defineProgram<T extends Record<string, MethodHint<any>>>;
+function isOnCurve(bytes: Bytes | string);
+function parseInstruction(instr: Instruction, tl: TokenList): any;
+function programAddress(program: string, ...seeds: Bytes[]);
+function tokenAddress(mint: string, owner: string, allowOffCurveOwner = false);
+function tokenFromSymbol(symbol: string, tokens = COMMON_TOKENS);
+function validateAddress(address: string);
+```
+
+Various other variables such as `SYS_PROGRAM` are also exported. Specific features:
 
 - [Create and sign simple transaction](#create-and-sign-simple-transaction)
 - [Decode transaction](#decode-transaction)
