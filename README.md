@@ -2,7 +2,7 @@
 
 Create, sign & decode Solana transactions with minimum deps.
 
-- Tiny: 674 LOC, 3K LOC with all deps bundled
+- Tiny: ~800 LOC, 3K LOC with all deps bundled
 - No network code in main package: allows simpler audits and offline usage
 - Can be used for transaction decoding in offline wallet. Solana web node could decode transactions, but can we trust it?
 
@@ -16,9 +16,7 @@ Create, sign & decode Solana transactions with minimum deps.
 import * as sol from 'micro-sol-signer';
 ```
 
-### Overview
-
-Summary of exported functions:
+Method summary:
 
 ```ts
 async function formatPrivate(privateKey: Bytes);
@@ -36,7 +34,7 @@ function tokenFromSymbol(symbol: string, tokens = COMMON_TOKENS);
 function validateAddress(address: string);
 ```
 
-Various other variables such as `SYS_PROGRAM` are also exported. Specific features:
+There are other variables such as `SYS_PROGRAM`, which are also exported. Specific features:
 
 - [Create and sign simple transaction](#create-and-sign-simple-transaction)
 - [Decode transaction](#decode-transaction)
