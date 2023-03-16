@@ -1,4 +1,4 @@
-import * as ed25519 from '@noble/ed25519';
+import { ed25519 } from '@noble/curves/ed25519';
 import { base58, base64, utf8 } from '@scure/base';
 import { sha256 } from '@noble/hashes/sha256';
 import * as P from 'micro-packed';
@@ -224,7 +224,7 @@ export function defineProgram<T extends Record<string, MethodHint<any>>>(
   };
   const program: Program<T> = {} as Program<T>;
   for (const m in methods) {
-    program[m] = (data: MethodData<typeof methods[typeof m]>): Instruction => ({
+    program[m] = (data: MethodData<(typeof methods)[typeof m]>): Instruction => ({
       program: address,
       data: mainCoder.encode({ TAG: m, data }),
       keys: Object.keys(methods[m].keys).map((name) => {
@@ -646,7 +646,7 @@ export const NonceAccount = P.struct({
   lamportPerSignature: P.U64LE,
 });
 
-function mod(a: bigint, b: bigint = ed25519.CURVE.P) {
+function mod(a: bigint, b: bigint = ed25519.CURVE.Fp.ORDER) {
   const res = a % b;
   return res >= 0n ? res : b + res;
 }
@@ -661,7 +661,7 @@ export function isOnCurve(bytes: Bytes | string) {
     const normed = Uint8Array.from(Array.from(bytes.slice(0, 31)).concat(normedLast));
     const modBytes = P.U256LE.encode(mod(P.U256LE.decode(normed)));
     if ((last & 0x80) !== 0) modBytes[31] |= 0x80;
-    ed25519.Point.fromHex(modBytes);
+    ed25519.ExtendedPoint.fromHex(modBytes);
     return true;
   } catch (e) {
     return false;
