@@ -18,14 +18,22 @@ const shortVecVectors = [
 ];
 
 (() => {
-  should('sol: key generation basic', async () => {
+  should('sol: key generation basic',  () => {
     const key = hex.decode('99da9559e15e913ee9ab2e53e3dfad575da33b49be1125bb922e33494f498828');
-    deepStrictEqual(await sol.getAddress(key), '2q7pyhPwAwZ3QMfZrnAbDhnh9mDUqycszcpf86VgQxhF');
+    deepStrictEqual(sol.getAddress(key), '2q7pyhPwAwZ3QMfZrnAbDhnh9mDUqycszcpf86VgQxhF');
+  });
+  should('sol: public key from private key',  () => {
+    const key = hex.decode('99da9559e15e913ee9ab2e53e3dfad575da33b49be1125bb922e33494f498828');
+    deepStrictEqual(sol.getPublicKey(key), hex.decode('1b2f49096e3e5dbd0fcfa9c0c0cd92d9ab3b21544b34d5dd4a65d98b878b9922'));
+  });
+  should('sol: address from public key',  () => {
+    const key = hex.decode('1b2f49096e3e5dbd0fcfa9c0c0cd92d9ab3b21544b34d5dd4a65d98b878b9922');
+    deepStrictEqual(sol.getAddressFromPublicKey(key), '2q7pyhPwAwZ3QMfZrnAbDhnh9mDUqycszcpf86VgQxhF');
   });
   for (let i = 0; i < vectors.keypair.length; i++) {
-    should(`sol: key generation ${i}`, async () => {
+    should(`sol: key generation ${i}`, () => {
       const { priv, pub } = vectors.keypair[i];
-      const address = await sol.getAddress(hex.decode(priv).slice(0, 32));
+      const address = sol.getAddress(hex.decode(priv).slice(0, 32));
       deepStrictEqual(address, pub);
     });
   }

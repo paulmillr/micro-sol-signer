@@ -762,12 +762,21 @@ export async function verifyTx(tx: TxData) {
   }
 }
 
-export async function getAddress(privateKey: Bytes) {
-  return base58.encode(await ed25519.getPublicKey(privateKey));
+export function getPublicKey(privateKey: Bytes) {
+  return ed25519.getPublicKey(privateKey);
 }
 
-export async function formatPrivate(privateKey: Bytes) {
-  const publicKey = await ed25519.getPublicKey(privateKey);
+export function getAddress(privateKey: Bytes) {
+  const publicKey = getPublicKey(privateKey);
+  return base58.encode(publicKey);
+}
+
+export function getAddressFromPublicKey(publicKey: Bytes) {
+  return base58.encode(publicKey);
+}
+
+export function formatPrivate(privateKey: Bytes) {
+  const publicKey = getPublicKey(privateKey);
   return base58.encode(P.concatBytes(privateKey, publicKey));
 }
 
@@ -792,7 +801,7 @@ export function createTx(from: string, to: string, amount: string, fee: bigint, 
 
 export async function signTx(privateKey: Bytes, data: TxData): Promise<[string, string]> {
   if (typeof data === 'string') data = base64.decode(data);
-  const address = await getAddress(privateKey);
+  const address = getAddress(privateKey);
   const raw = TransactionRaw.decode(data);
   const reqSignatures = raw.msg.keys.slice(0, raw.msg.requiredSignatures);
   if (!reqSignatures.filter((i) => i == address).length)
