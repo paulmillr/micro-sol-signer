@@ -747,7 +747,7 @@ export const swapProgram = 'SwaPpA9LAaLfeLi3a68M4DjnLqgtticKg6CnyNwgAC8';
 
 type TxData = Bytes | string;
 
-export async function verifyTx(tx: TxData) {
+export function verifyTx(tx: TxData) {
   if (typeof tx === 'string') tx = base64.decode(tx);
   if (tx.length > 1280 - 40 - 8) throw new Error('sol: transaction too big');
   const parsed = Transaction.decode(tx);
@@ -757,17 +757,26 @@ export async function verifyTx(tx: TxData) {
     const address = raw.msg.keys[i];
     const pubKey = base58.decode(address);
     const sig = parsed.signatures[address];
-    if (!(await ed25519.verify(sig, msg, pubKey)))
+    if (!ed25519.verify(sig, msg, pubKey))
       throw new Error(`sol: invalid signature sig=${sig} msg=${msg}`);
   }
 }
 
-export async function getAddress(privateKey: Bytes) {
-  return base58.encode(await ed25519.getPublicKey(privateKey));
+export function getPublicKey(privateKey: Bytes) {
+  return ed25519.getPublicKey(privateKey);
 }
 
-export async function formatPrivate(privateKey: Bytes) {
-  const publicKey = await ed25519.getPublicKey(privateKey);
+export function getAddress(privateKey: Bytes) {
+  const publicKey = getPublicKey(privateKey);
+  return base58.encode(publicKey);
+}
+
+export function getAddressFromPublicKey(publicKey: Bytes) {
+  return base58.encode(publicKey);
+}
+
+export function formatPrivate(privateKey: Bytes) {
+  const publicKey = getPublicKey(privateKey);
   return base58.encode(P.concatBytes(privateKey, publicKey));
 }
 
@@ -790,14 +799,14 @@ export function createTx(from: string, to: string, amount: string, fee: bigint, 
   );
 }
 
-export async function signTx(privateKey: Bytes, data: TxData): Promise<[string, string]> {
+export function signTx(privateKey: Bytes, data: TxData): [string, string] {
   if (typeof data === 'string') data = base64.decode(data);
-  const address = await getAddress(privateKey);
+  const address = getAddress(privateKey);
   const raw = TransactionRaw.decode(data);
   const reqSignatures = raw.msg.keys.slice(0, raw.msg.requiredSignatures);
   if (!reqSignatures.filter((i) => i == address).length)
     throw new Error(`SOLPrivate: tx doesn't require signature for address=${address}`);
-  const sig = await ed25519.sign(Message.encode(raw.msg), privateKey);
+  const sig = ed25519.sign(Message.encode(raw.msg), privateKey);
   for (let i = 0; i < reqSignatures.length; i++)
     if (reqSignatures[i] === address) raw.signatures[i] = sig;
   // Base58 encoding for tx is deprecated

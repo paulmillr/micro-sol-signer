@@ -1,4 +1,4 @@
-import { deepStrictEqual, throws, rejects } from 'assert';
+import { deepStrictEqual, throws } from 'assert';
 import { should } from 'micro-should';
 import { hex, base64 } from '@scure/base';
 import fs from 'node:fs/promises';
@@ -18,19 +18,27 @@ const shortVecVectors = [
 ];
 
 (() => {
-  should('sol: key generation basic', async () => {
+  should('sol: key generation basic',  () => {
     const key = hex.decode('99da9559e15e913ee9ab2e53e3dfad575da33b49be1125bb922e33494f498828');
-    deepStrictEqual(await sol.getAddress(key), '2q7pyhPwAwZ3QMfZrnAbDhnh9mDUqycszcpf86VgQxhF');
+    deepStrictEqual(sol.getAddress(key), '2q7pyhPwAwZ3QMfZrnAbDhnh9mDUqycszcpf86VgQxhF');
+  });
+  should('sol: public key from private key',  () => {
+    const key = hex.decode('99da9559e15e913ee9ab2e53e3dfad575da33b49be1125bb922e33494f498828');
+    deepStrictEqual(sol.getPublicKey(key), hex.decode('1b2f49096e3e5dbd0fcfa9c0c0cd92d9ab3b21544b34d5dd4a65d98b878b9922'));
+  });
+  should('sol: address from public key',  () => {
+    const key = hex.decode('1b2f49096e3e5dbd0fcfa9c0c0cd92d9ab3b21544b34d5dd4a65d98b878b9922');
+    deepStrictEqual(sol.getAddressFromPublicKey(key), '2q7pyhPwAwZ3QMfZrnAbDhnh9mDUqycszcpf86VgQxhF');
   });
   for (let i = 0; i < vectors.keypair.length; i++) {
-    should(`sol: key generation ${i}`, async () => {
+    should(`sol: key generation ${i}`, () => {
       const { priv, pub } = vectors.keypair[i];
-      const address = await sol.getAddress(hex.decode(priv).slice(0, 32));
+      const address = sol.getAddress(hex.decode(priv).slice(0, 32));
       deepStrictEqual(address, pub);
     });
   }
   for (let i = 0; i < vectors.isOnCurve.length; i++) {
-    should(`sol: isOnCurve ${i}`, async () => {
+    should(`sol: isOnCurve ${i}`, () => {
       const { data, exp } = vectors.isOnCurve[i];
       deepStrictEqual(sol.isOnCurve(hex.decode(data)), exp, `pubKey: ${data}`);
     });
@@ -63,9 +71,9 @@ const shortVecVectors = [
       )
     );
   });
-  should('sol: transaction', async () => {
+  should('sol: transaction', () => {
     const privKey = new Uint8Array(32).fill(8);
-    const source = await sol.getAddress(privKey);
+    const source = sol.getAddress(privKey);
     const blockhash = 'EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3hq1k';
     const destination = 'J3dxNj7nDRRqRRXuEMynDG57DkZK4jYRuv3Garmb1i99';
     const expUnsigned = base64.decode(
@@ -83,9 +91,9 @@ const shortVecVectors = [
       signatures: {},
     });
     deepStrictEqual(unsigned, expUnsigned);
-    deepStrictEqual(base64.decode((await sol.signTx(privKey, unsigned))[1]), expSigned);
-    await sol.verifyTx(expSigned);
-    rejects(() => sol.verifyTx(expUnsigned));
+    deepStrictEqual(base64.decode( sol.signTx(privKey, unsigned)[1]), expSigned);
+    sol.verifyTx(expSigned);
+    throws(() => sol.verifyTx(expUnsigned));
   });
   should('sol: sys/createAccount', () => {
     const opt = {
