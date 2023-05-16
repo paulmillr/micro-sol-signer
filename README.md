@@ -19,10 +19,10 @@ import * as sol from 'micro-sol-signer';
 Method summary:
 
 ```ts
-async function formatPrivate(privateKey: Bytes);
-async function getAddress(privateKey: Bytes);
-async function signTx(privateKey: Bytes, data: TxData): Promise<[string, string]>;
-async function verifyTx(tx: TxData);
+function formatPrivate(privateKey: Bytes);
+function getAddress(privateKey: Bytes);
+function signTx(privateKey: Bytes, data: TxData): Promise<[string, string]>;
+function verifyTx(tx: TxData);
 function createTx(from: string, to: string, amount: string, fee: bigint, blockhash: string);
 function createTxComplex(address: string, instructions: Instruction[], blockhash: string);
 function defineProgram<T extends Record<string, MethodHint<any>>>;
@@ -47,11 +47,11 @@ There are other variables such as `SYS_PROGRAM`, which are also exported. Specif
 // 11111111... private key
 const privKey = new Uint8Array(32).fill(0x01);
 // Get address of private key
-const address = await sol.getAddress(privKey);
+const address = sol.getAddress(privKey);
 // AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9
 
 // Format private key
-const privFormatted = await sol.formatPrivate(privKey);
+const privFormatted = sol.formatPrivate(privKey);
 // 2AXDGYSE4f2sz7tvMMzyHvUfcoJmxudvdhBcmiUSo6iuCXagjUCKEQF21awZnUGxmwD4m9vGXuC3qieHXJQHAcT
 
 // Simple tx (transfer some sol's from one account to another)
@@ -61,7 +61,7 @@ const amount = '10.1';
 const fee = '1.2';
 const tx0 = sol.createTx(address, toAddress, amount, fee, blockhash);
 // AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAEDiojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1zTVICVf7+to6zQ/+XautpF+KSSoZ7ESTxv3rg8xPqyXgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/ORj/WtXHGLCh9wC0eGkf26qTFR5x3nCqwXXmoVtZb0BAgIAAQwCAAAAAMUBWgIAAAA=
-const [txHash0, signedTx0] = await sol.signTx(privKey, tx0);
+const [txHash0, signedTx0] = sol.signTx(privKey, tx0);
 /*
 {
   txHash0: '3wL4PdgBr3J2r4uuUrf4MU7HhgrJg6re2YRBeAwsZpYZRHgSgUAJymLRu6GcnKk7ZuR3F5UgPRTNj1mbzv966PTy',

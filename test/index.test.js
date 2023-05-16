@@ -1,4 +1,4 @@
-import { deepStrictEqual, throws, rejects } from 'assert';
+import { deepStrictEqual, throws } from 'assert';
 import { should } from 'micro-should';
 import { hex, base64 } from '@scure/base';
 import fs from 'node:fs/promises';
@@ -38,7 +38,7 @@ const shortVecVectors = [
     });
   }
   for (let i = 0; i < vectors.isOnCurve.length; i++) {
-    should(`sol: isOnCurve ${i}`, async () => {
+    should(`sol: isOnCurve ${i}`, () => {
       const { data, exp } = vectors.isOnCurve[i];
       deepStrictEqual(sol.isOnCurve(hex.decode(data)), exp, `pubKey: ${data}`);
     });
@@ -71,9 +71,9 @@ const shortVecVectors = [
       )
     );
   });
-  should('sol: transaction', async () => {
+  should('sol: transaction', () => {
     const privKey = new Uint8Array(32).fill(8);
-    const source = await sol.getAddress(privKey);
+    const source = sol.getAddress(privKey);
     const blockhash = 'EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3hq1k';
     const destination = 'J3dxNj7nDRRqRRXuEMynDG57DkZK4jYRuv3Garmb1i99';
     const expUnsigned = base64.decode(
@@ -91,9 +91,9 @@ const shortVecVectors = [
       signatures: {},
     });
     deepStrictEqual(unsigned, expUnsigned);
-    deepStrictEqual(base64.decode((await sol.signTx(privKey, unsigned))[1]), expSigned);
-    await sol.verifyTx(expSigned);
-    rejects(() => sol.verifyTx(expUnsigned));
+    deepStrictEqual(base64.decode( sol.signTx(privKey, unsigned)[1]), expSigned);
+    sol.verifyTx(expSigned);
+    throws(() => sol.verifyTx(expUnsigned));
   });
   should('sol: sys/createAccount', () => {
     const opt = {
