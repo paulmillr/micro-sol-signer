@@ -307,10 +307,10 @@ async function createTx(
 
 ### ABI/API
 
-There is no official ABI for Solana (in comparison with ethereum), but it is actually not big deal,
+There is no official ABI for Solana (in comparison with ethereum), but it is actually not a big deal,
 since you will need to write API on top of raw ABI anyway.
-However, we have small DSL here (based on [micro-packed](https://github.com/paulmillr/micro-packed)),
-which allows to define ABI easier (look at `sol.token` definition in `index.ts`)
+We have small DSL, based on [micro-packed](https://github.com/paulmillr/micro-packed),
+which allows to define ABI easier: look at `sol.token` definition in `index.ts`.
 
 ## License
 
