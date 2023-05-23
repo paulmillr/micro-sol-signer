@@ -1,6 +1,6 @@
 {
   "name": "micro-sol-signer",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Create, sign & decode Solana transactions with minimum deps",
   "files": [
     "index.js",
@@ -19,7 +19,7 @@
     "micro-packed": "^0.3.2"
   },
   "devDependencies": {
-    "micro-should": "0.2.0",
+    "micro-should": "0.4.0",
     "prettier": "2.8.4",
     "typescript": "5.0.2"
   },
