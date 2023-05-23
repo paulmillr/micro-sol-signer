@@ -1,5 +1,5 @@
 import { ed25519 } from '@noble/curves/ed25519';
-import { base58, base64, utf8 } from '@scure/base';
+import { base58, base64, hex, utf8 } from '@scure/base';
 import { sha256 } from '@noble/hashes/sha256';
 import * as P from 'micro-packed';
 
@@ -775,9 +775,25 @@ export function getAddressFromPublicKey(publicKey: Bytes) {
   return base58.encode(publicKey);
 }
 
-export function formatPrivate(privateKey: Bytes) {
+type PrivateKeyFormat = 'base58' | 'hex' | 'array';
+
+export function formatPrivate(privateKey: Bytes, format: PrivateKeyFormat = 'base58') {
   const publicKey = getPublicKey(privateKey);
-  return base58.encode(P.concatBytes(privateKey, publicKey));
+  const fullKey = P.concatBytes(privateKey, publicKey);
+  switch (format) {
+    case 'base58': {
+      return base58.encode(fullKey);
+    }
+    case 'hex': {
+      return hex.encode(fullKey);
+    }
+    case 'array': {
+      return Array.from(fullKey);
+    }
+    default: {
+      throw new Error('sol: unsupported format');
+    }
+  }
 }
 
 export function createTxComplex(address: string, instructions: Instruction[], blockhash: string) {
