@@ -9,7 +9,7 @@
       "dom"
     ],
     "module": "es6",
-    "moduleResolution": "node16",
+    "moduleResolution": "bundler",
     "outDir": ".",
     "noImplicitAny": true,
     "removeComments": true,
