@@ -1,24 +1,9 @@
 {
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "target": "es2020",
-    "lib": ["es2020"],
     "module": "commonjs",
     "outDir": "lib",
-    "baseUrl": ".",
-    "sourceMap": true,
-    "resolveJsonModule": true,
     "declaration": true,
-    "declarationMap": true,
-    "strict": true,
-    "allowSyntheticDefaultImports": false,
-    "allowUnreachableCode": false,
-    "esModuleInterop": false,
-    "noFallthroughCasesInSwitch": true,
-    "noImplicitReturns": true,
-    "noUncheckedIndexedAccess": false,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-  },
-  "include": ["index.ts"],
-  "exclude": ["node_modules", "lib"]
+    "declarationMap": true
+  }
 }
