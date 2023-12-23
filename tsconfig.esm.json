@@ -6,6 +6,7 @@
     "moduleResolution": "bundler",
     "outDir": "lib/esm",
     "baseUrl": ".",
+    "sourceMap": true,
     "strict": true,
     "allowSyntheticDefaultImports": false,
     "allowUnreachableCode": false,

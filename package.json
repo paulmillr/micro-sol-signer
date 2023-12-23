@@ -1,11 +1,12 @@
 {
   "name": "micro-sol-signer",
-  "version": "0.3.1",
+  "version": "0.4.0-pre",
   "description": "Create, sign & decode Solana transactions with minimum deps",
   "files": [
     "index.ts",
     "lib/index.js",
     "lib/index.d.ts",
+    "lib/index.d.ts.map",
     "lib/index.js.map",
     "lib/esm/package.json",
     "lib/esm/index.js",
