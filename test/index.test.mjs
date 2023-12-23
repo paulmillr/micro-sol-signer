@@ -2,7 +2,7 @@ import { deepStrictEqual, throws } from 'assert';
 import { should } from 'micro-should';
 import { hex, base64 } from '@scure/base';
 import fs from 'node:fs/promises';
-import * as sol from '../index.js';
+import * as sol from '../lib/esm/index.js';
 
 const vectors = JSON.parse(await fs.readFile(new URL('vectors-sol.json', import.meta.url)));
 

@@ -723,6 +723,7 @@ export const COMMON_TOKENS: TokenList = {
 
 export function tokenFromSymbol(symbol: string, tokens = COMMON_TOKENS) {
   for (let c in tokens) if (tokens[c].symbol === symbol) return { ...tokens[c], contract: c };
+  return;
 }
 
 // [1, 0, 0, 0] -> true
