@@ -380,7 +380,7 @@ export const sys = defineProgram(SYS_PROGRAM, P.U32LE, {
 });
 
 // Type tests
-const assertType = <T>(value: T) => {};
+const assertType = <T>(_value: T) => {};
 assertType<(o: { lamports: bigint; source: string; destination: string }) => Instruction>(
   sys.transfer
 );
@@ -428,7 +428,7 @@ export const token = defineProgram(TOKEN_PROGRAM, P.U8, {
       account: { sign: false, write: true },
       _rent: { address: SYS_RENT, sign: false, write: false },
     },
-    hint: (o: { account: string; m: number }, tl: TokenList) =>
+    hint: (o: { account: string; m: number }, _: TokenList) =>
       `Initialize multi-sig token account=${o.account} with signatures=${o.m}`,
   },
   transfer: {
@@ -440,7 +440,7 @@ export const token = defineProgram(TOKEN_PROGRAM, P.U8, {
     },
     hint: (
       o: { amount: bigint; source: string; destination: number; owner: string },
-      tl: TokenList
+      _: TokenList
     ) =>
       `Transfer ${o.amount} from token account=${o.source} of owner=${o.owner} to ${o.destination}`,
   },
@@ -451,10 +451,7 @@ export const token = defineProgram(TOKEN_PROGRAM, P.U8, {
       delegate: { sign: false, write: false },
       owner: { sign: true, write: false },
     },
-    hint: (
-      o: { amount: bigint; account: string; delegate: number; owner: string },
-      tl: TokenList
-    ) =>
+    hint: (o: { amount: bigint; account: string; delegate: number; owner: string }, _: TokenList) =>
       `Approve authority of delegate=${o.delegate} over tokens on account=${o.account} on behalf of owner=${o.owner}`,
   },
   revoke: {
@@ -463,7 +460,7 @@ export const token = defineProgram(TOKEN_PROGRAM, P.U8, {
       account: { sign: false, write: true },
       owner: { sign: true, write: false },
     },
-    hint: (o: { amount: bigint; account: string; owner: string }, tl: TokenList) =>
+    hint: (o: { amount: bigint; account: string; owner: string }, _: TokenList) =>
       `Revoke delegate's authority over tokens on account=${o.account} on behalf of owner=${o.owner}`,
   },
   setAuthority: {
@@ -477,7 +474,7 @@ export const token = defineProgram(TOKEN_PROGRAM, P.U8, {
     },
     hint: (
       o: { newAuthority: string; account: string; currentAuthority: string; authorityType: string },
-      tl: TokenList
+      _: TokenList
     ) =>
       `Sets a new authority=${o.newAuthority} of a mint or account=${o.account}. Current authority=${o.currentAuthority}. Authority Type: ${o.authorityType}`,
   },
@@ -496,7 +493,7 @@ export const token = defineProgram(TOKEN_PROGRAM, P.U8, {
       mint: { sign: false, write: true },
       owner: { sign: true, write: false },
     },
-    hint: (o: { amount: bigint; account: string; mint: string; owner: string }, tl: TokenList) =>
+    hint: (o: { amount: bigint; account: string; mint: string; owner: string }, _: TokenList) =>
       `Burn ${o.amount} tokens from account=${o.account} of owner=${o.owner} mint=${o.mint}`,
   },
   closeAccount: {
@@ -506,7 +503,7 @@ export const token = defineProgram(TOKEN_PROGRAM, P.U8, {
       dest: { sign: false, write: true },
       owner: { sign: true, write: false },
     },
-    hint: (o: { account: string; dest: string; owner: string }, tl: TokenList) =>
+    hint: (o: { account: string; dest: string; owner: string }, _: TokenList) =>
       `Close token account=${o.account} of owner=${o.owner}, transferring all its SOL to destionation account=${o.dest}`,
   },
   freezeAccount: {
@@ -516,7 +513,7 @@ export const token = defineProgram(TOKEN_PROGRAM, P.U8, {
       mint: { sign: false, write: true },
       authority: { sign: true, write: false },
     },
-    hint: (o: { account: string; authority: string; mint: string }, tl: TokenList) =>
+    hint: (o: { account: string; authority: string; mint: string }, _: TokenList) =>
       `Freeze token account=${o.account} of mint=${o.mint} using freeze_authority=${o.authority}`,
   },
   thawAccount: {
@@ -526,7 +523,7 @@ export const token = defineProgram(TOKEN_PROGRAM, P.U8, {
       mint: { sign: false, write: false },
       authority: { sign: true, write: false },
     },
-    hint: (o: { account: string; authority: string; mint: string }, tl: TokenList) =>
+    hint: (o: { account: string; authority: string; mint: string }, _: TokenList) =>
       `Thaw a frozne token account=${o.account} of mint=${o.mint} using freeze_authority=${o.authority}`,
   },
   transferChecked: {
@@ -807,7 +804,13 @@ export function createTxComplex(address: string, instructions: Instruction[], bl
   );
 }
 
-export function createTx(from: string, to: string, amount: string, fee: bigint, blockhash: string) {
+export function createTx(
+  from: string,
+  to: string,
+  amount: string,
+  _fee: bigint,
+  blockhash: string
+) {
   const amountNum = Decimal.decode(amount);
   return createTxComplex(
     from,

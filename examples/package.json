@@ -15,7 +15,7 @@
     "./index.d.ts": "./lib/index.d.ts"
   },
   "scripts": {
-    "build": "tsc -d && tsc -p tsconfig.esm.json",
+    "build": "tsc && tsc -p tsconfig.esm.json",
     "lint": "prettier --check index.ts",
     "test": "node test/index.js"
   },
