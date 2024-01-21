@@ -2,11 +2,13 @@
 
 Create, sign & decode Solana transactions with minimum deps.
 
-- Tiny: ~800 LOC, 3K LOC with all deps bundled
-- No network code in main package: allows simpler audits and offline usage
-- Can be used for transaction decoding in offline wallet. Solana web node could decode transactions, but can we trust it?
+- 🔓 Secure: minimum deps, audited [noble](https://paulmillr.com/noble/) cryptography
+- 🔻 Tree-shaking-friendly: use only what's necessary, other code won't be included
+- 🌍 No network code for simplified auditing and offline usage
+- ✍️ Create, sign and decode transactions
+- 🪶 800 lines of code
 
-*Check out all web3 utility libraries:* [ETH](https://github.com/paulmillr/micro-eth-signer), [BTC](https://github.com/paulmillr/scure-btc-signer), [SOL](https://github.com/paulmillr/micro-sol-signer), [micro-web3](https://github.com/paulmillr/micro-web3), [tx-tor-broadcaster](https://github.com/paulmillr/tx-tor-broadcaster)
+*Check out all web3 utility libraries:* [ETH](https://github.com/paulmillr/micro-eth-signer), [BTC](https://github.com/paulmillr/scure-btc-signer), [SOL](https://github.com/paulmillr/micro-sol-signer), [tx-tor-broadcaster](https://github.com/paulmillr/tx-tor-broadcaster)
 
 ## Usage
 
