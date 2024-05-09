@@ -28,7 +28,16 @@ export const shortVec = P.wrap({
 });
 
 const rustString = P.string(P.padRight(8, P.U32LE, undefined));
-const pubKey = P.bytesFormatted(32, 'base58');
+
+const b58 = () => {
+  const inner = P.bytes(32);
+  return P.wrap({
+    size: inner.size,
+    encodeStream: (w: P.Writer, value: string) => inner.encodeStream(w, base58.decode(value)),
+    decodeStream: (r: P.Reader): string => base58.encode(inner.decodeStream(r)),
+  });
+};
+const pubKey = b58();
 
 export const Message = P.struct({
   requiredSignatures: P.U8,
