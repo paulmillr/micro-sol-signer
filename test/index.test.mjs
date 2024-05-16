@@ -18,36 +18,49 @@ const shortVecVectors = [
 ];
 
 (() => {
-  should('sol: key generation basic',  () => {
+  should('sol: key generation basic', () => {
     const key = hex.decode('99da9559e15e913ee9ab2e53e3dfad575da33b49be1125bb922e33494f498828');
     deepStrictEqual(sol.getAddress(key), '2q7pyhPwAwZ3QMfZrnAbDhnh9mDUqycszcpf86VgQxhF');
   });
-  should('sol: public key from private key',  () => {
+  should('sol: public key from private key', () => {
     const key = hex.decode('99da9559e15e913ee9ab2e53e3dfad575da33b49be1125bb922e33494f498828');
-    deepStrictEqual(sol.getPublicKey(key), hex.decode('1b2f49096e3e5dbd0fcfa9c0c0cd92d9ab3b21544b34d5dd4a65d98b878b9922'));
+    deepStrictEqual(
+      sol.getPublicKey(key),
+      hex.decode('1b2f49096e3e5dbd0fcfa9c0c0cd92d9ab3b21544b34d5dd4a65d98b878b9922')
+    );
   });
-  should('sol: address from public key',  () => {
+  should('sol: address from public key', () => {
     const key = hex.decode('1b2f49096e3e5dbd0fcfa9c0c0cd92d9ab3b21544b34d5dd4a65d98b878b9922');
-    deepStrictEqual(sol.getAddressFromPublicKey(key), '2q7pyhPwAwZ3QMfZrnAbDhnh9mDUqycszcpf86VgQxhF');
+    deepStrictEqual(
+      sol.getAddressFromPublicKey(key),
+      '2q7pyhPwAwZ3QMfZrnAbDhnh9mDUqycszcpf86VgQxhF'
+    );
   });
   should('sol: format private key base58', () => {
     const key = hex.decode('99da9559e15e913ee9ab2e53e3dfad575da33b49be1125bb922e33494f498828');
-    deepStrictEqual(sol.formatPrivate(key), '45QmaP6zVBfDPLWrbtaMiVFKbRLPwwAqXHiDkx2FcUHZoV1uU6uB8cZyGBKQbiExXyyzghaE65THFi2h8mSwkFuj');
+    deepStrictEqual(
+      sol.formatPrivate(key),
+      '45QmaP6zVBfDPLWrbtaMiVFKbRLPwwAqXHiDkx2FcUHZoV1uU6uB8cZyGBKQbiExXyyzghaE65THFi2h8mSwkFuj'
+    );
   });
   should('sol: format private key hex', () => {
     const key = hex.decode('99da9559e15e913ee9ab2e53e3dfad575da33b49be1125bb922e33494f498828');
-    deepStrictEqual(sol.formatPrivate(key, 'hex'), '99da9559e15e913ee9ab2e53e3dfad575da33b49be1125bb922e33494f4988281b2f49096e3e5dbd0fcfa9c0c0cd92d9ab3b21544b34d5dd4a65d98b878b9922');
+    deepStrictEqual(
+      sol.formatPrivate(key, 'hex'),
+      '99da9559e15e913ee9ab2e53e3dfad575da33b49be1125bb922e33494f4988281b2f49096e3e5dbd0fcfa9c0c0cd92d9ab3b21544b34d5dd4a65d98b878b9922'
+    );
   });
   should('sol: format private key array', () => {
     const key = hex.decode('99da9559e15e913ee9ab2e53e3dfad575da33b49be1125bb922e33494f498828');
-    deepStrictEqual(sol.formatPrivate(key, 'array'), [
-      153, 218, 149,  89, 225,  94, 145,  62, 233, 171,  46,
-       83, 227, 223, 173,  87,  93, 163,  59,  73, 190,  17,
-       37, 187, 146,  46,  51,  73,  79,  73, 136,  40,  27,
-       47,  73,   9, 110,  62,  93, 189,  15, 207, 169, 192,
-      192, 205, 146, 217, 171,  59,  33,  84,  75,  52, 213,
-      221,  74, 101, 217, 139, 135, 139, 153,  34
-    ]);
+    deepStrictEqual(
+      sol.formatPrivate(key, 'array'),
+      [
+        153, 218, 149, 89, 225, 94, 145, 62, 233, 171, 46, 83, 227, 223, 173, 87, 93, 163, 59, 73,
+        190, 17, 37, 187, 146, 46, 51, 73, 79, 73, 136, 40, 27, 47, 73, 9, 110, 62, 93, 189, 15,
+        207, 169, 192, 192, 205, 146, 217, 171, 59, 33, 84, 75, 52, 213, 221, 74, 101, 217, 139,
+        135, 139, 153, 34,
+      ]
+    );
   });
   should('sol: format private key throws', () => {
     const key = hex.decode('99da9559e15e913ee9ab2e53e3dfad575da33b49be1125bb922e33494f498828');
@@ -114,7 +127,7 @@ const shortVecVectors = [
       signatures: {},
     });
     deepStrictEqual(unsigned, expUnsigned);
-    deepStrictEqual(base64.decode( sol.signTx(privKey, unsigned)[1]), expSigned);
+    deepStrictEqual(base64.decode(sol.signTx(privKey, unsigned)[1]), expSigned);
     sol.verifyTx(expSigned);
     throws(() => sol.verifyTx(expUnsigned));
   });
@@ -166,7 +179,7 @@ const shortVecVectors = [
     const opt = {
       source: 'DV8e8SwcZEaPEGDsLEh3HmXySxbMGaC2TSVCh2Pz6UF1',
       destination: '6y6nyKZKU3kuhSHdGT9YQ63DSj2tWoqKB8xui2cofqqj',
-      lamports: 2 ** 53,
+      lamports: 2n ** 53n,
     };
     deepStrictEqual(sol.sys.transfer(opt), {
       program: '11111111111111111111111111111111',
@@ -181,7 +194,7 @@ const shortVecVectors = [
     const opt = {
       source: 'DV8e8SwcZEaPEGDsLEh3HmXySxbMGaC2TSVCh2Pz6UF1',
       destination: '6y6nyKZKU3kuhSHdGT9YQ63DSj2tWoqKB8xui2cofqqj',
-      lamports: 2 ** 53 - 1,
+      lamports: BigInt(2 ** 53 - 1),
     };
     deepStrictEqual(sol.sys.transfer(opt), {
       program: '11111111111111111111111111111111',
@@ -198,7 +211,7 @@ const shortVecVectors = [
     const opt = {
       source: 'DV8e8SwcZEaPEGDsLEh3HmXySxbMGaC2TSVCh2Pz6UF1',
       destination: '6y6nyKZKU3kuhSHdGT9YQ63DSj2tWoqKB8xui2cofqqj',
-      lamports: 2 ** 54 - 1,
+      lamports: BigInt(2 ** 54 - 1),
     };
     deepStrictEqual(sol.sys.transfer(opt), {
       program: '11111111111111111111111111111111',

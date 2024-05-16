@@ -675,9 +675,9 @@ export function isOnCurve(bytes: Bytes | string) {
 }
 
 export function programAddress(program: string, ...seeds: Bytes[]) {
-  let seed = P.concatBytes(...seeds);
+  let seed = P.utils.concatBytes(...seeds);
   const noncePos = seed.length;
-  seed = P.concatBytes(
+  seed = P.utils.concatBytes(
     seed,
     new Uint8Array([0]),
     base58.decode(program),
@@ -786,7 +786,7 @@ type PrivateKeyFormat = 'base58' | 'hex' | 'array';
 
 export function formatPrivate(privateKey: Bytes, format: PrivateKeyFormat = 'base58') {
   const publicKey = getPublicKey(privateKey);
-  const fullKey = P.concatBytes(privateKey, publicKey);
+  const fullKey = P.utils.concatBytes(privateKey, publicKey);
   switch (format) {
     case 'base58': {
       return base58.encode(fullKey);

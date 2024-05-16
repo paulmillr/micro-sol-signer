@@ -26,7 +26,7 @@
     "@noble/curves": "^1.3.0",
     "@noble/hashes": "^1.3.0",
     "@scure/base": "^1.1.5",
-    "micro-packed": "^0.5.1"
+    "micro-packed": "~0.6.1"
   },
   "devDependencies": {
     "@paulmillr/jsbt": "0.1.0",
@@ -47,16 +47,6 @@
     "format": "prettier --print-width 100 --single-quote --write index.ts",
     "test": "node test/index.test.mjs"
   },
-  "keywords": [
-    "solana",
-    "sol",
-    "web3",
-    "sign",
-    "signer",
-    "tx",
-    "transaction",
-    "address",
-    "token"
-  ],
+  "keywords": ["solana", "sol", "web3", "sign", "signer", "tx", "transaction", "address", "token"],
   "funding": "https://paulmillr.com/funding/"
 }
