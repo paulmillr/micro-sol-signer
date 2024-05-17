@@ -1,6 +1,6 @@
 {
   "name": "micro-sol-signer",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Create, sign & decode Solana transactions with minimum deps",
   "files": [
     "index.ts",
@@ -26,7 +26,7 @@
     "@noble/curves": "^1.3.0",
     "@noble/hashes": "^1.3.0",
     "@scure/base": "^1.1.5",
-    "micro-packed": "~0.6.1"
+    "micro-packed": "~0.6.2"
   },
   "devDependencies": {
     "@paulmillr/jsbt": "0.1.0",
