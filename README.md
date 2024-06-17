@@ -4,11 +4,10 @@ Create, sign & decode Solana transactions with minimum deps.
 
 - 🔓 Secure: minimum deps, audited [noble](https://paulmillr.com/noble/) cryptography
 - 🔻 Tree-shaking-friendly: use only what's necessary, other code won't be included
-- 🌍 No network code for simplified auditing and offline usage
 - ✍️ Create, sign and decode transactions
 - 🪶 800 lines of code
 
-*Check out all web3 utility libraries:* [ETH](https://github.com/paulmillr/micro-eth-signer), [BTC](https://github.com/paulmillr/scure-btc-signer), [SOL](https://github.com/paulmillr/micro-sol-signer), [tx-tor-broadcaster](https://github.com/paulmillr/tx-tor-broadcaster)
+_Check out all web3 utility libraries:_ [ETH](https://github.com/paulmillr/micro-eth-signer), [BTC](https://github.com/paulmillr/scure-btc-signer), [SOL](https://github.com/paulmillr/micro-sol-signer), [tx-tor-broadcaster](https://github.com/paulmillr/tx-tor-broadcaster)
 
 ## Usage
 
@@ -43,6 +42,7 @@ There are other variables such as `SYS_PROGRAM`, which are also exported. Specif
 - [Create and sign simple transaction](#create-and-sign-simple-transaction)
 - [Decode transaction](#decode-transaction)
 - [Create complex transactions and send tokens](#create-complex-transactions-and-send-tokens)
+- [Network](#network)
 - [ABI / API](#abiapi)
 
 ### Create and sign simple transaction
@@ -308,6 +308,17 @@ async function createTx(
   throw new Error('SOL.createTx: unexpected case');
 }
 ```
+
+### Network
+
+```ts
+import * as net from 'micro-sol-signer/net.js';
+// Docs available in src/net.ts
+```
+
+The section should be written; for now check out source code for network-related methods, like fetching balances, or sending txs.
+
+No real network calls are done in the library for simplified auditing. When network needs to be used, JSON-RPC compatible provider is required. We have one in [micro-ftch](https://github.com/paulmillr/micro-ftch) and it's recommended for usage.
 
 ### ABI/API
 

@@ -725,6 +725,7 @@ export function tokenAddress(mint: string, owner: string, allowOffCurveOwner = f
 export const COMMON_TOKENS: TokenList = {
   So11111111111111111111111111111111111111112: { decimals: 9, symbol: 'SOL' }, // Wrapped SOL
   Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB: { decimals: 6, symbol: 'USDT', price: 1 },
+  EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v: { decimals: 6, symbol: 'USDC', price: 1 },
 };
 
 export function tokenFromSymbol(symbol: string, tokens = COMMON_TOKENS) {
