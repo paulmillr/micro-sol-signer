@@ -3,7 +3,7 @@
 Create, sign & decode Solana transactions with minimum deps.
 
 - 🔓 Secure: minimum deps, audited [noble](https://paulmillr.com/noble/) cryptography
-- 🔻 Tree-shaking-friendly: use only what's necessary, other code won't be included
+- 🔻 Tree-shakeable: unused code is excluded from your builds
 - ✍️ Create, sign and decode transactions
 - 🪶 800 lines of code
 

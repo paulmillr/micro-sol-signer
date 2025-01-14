@@ -1,4 +1,4 @@
-import { deepStrictEqual, throws } from 'assert';
+import { deepStrictEqual, throws } from 'node:assert';
 import { describe, should } from 'micro-should';
 import { hex, base64 } from '@scure/base';
 import fs from 'node:fs';
@@ -822,8 +822,4 @@ describe('Solana', () => {
   });
 });
 
-// ESM is broken.
-import url from 'node:url';
-if (import.meta.url === url.pathToFileURL(process.argv[1]).href) {
-  should.run();
-}
+should.runWhen(import.meta.url);

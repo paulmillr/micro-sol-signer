@@ -1,4 +1,4 @@
-import { deepStrictEqual, throws } from 'assert';
+import { deepStrictEqual, throws } from 'node:assert';
 import { describe, should } from 'micro-should';
 import { URL, ArchiveNodeProvider, calcTransfersDiff } from '../lib/esm/net.js';
 import * as mftch from 'micro-ftch';
@@ -208,8 +208,4 @@ describe('Net', () => {
   });
 });
 
-// ESM is broken.
-import url from 'node:url';
-if (import.meta.url === url.pathToFileURL(process.argv[1]).href) {
-  should.run();
-}
+should.runWhen(import.meta.url);

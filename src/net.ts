@@ -197,7 +197,7 @@ export class ArchiveNodeProvider {
    * @param amount - Lamports amount
    * @returns
    */
-  airdrop(to: string, amount: bigint) {
+  airdrop(to: string, amount: bigint): Promise<any> {
     return this.base64Call('requestAirdrop', to, Number(amount));
   }
   /**
@@ -243,7 +243,7 @@ export class ArchiveNodeProvider {
    * @param size - Account data length (bytes)
    * @returns
    */
-  minBalance(size: number) {
+  minBalance(size: number): Promise<any> {
     if (!Number.isSafeInteger(size)) throw new Error(`minBalance: wrong size=${size}`);
     return this.rpc.call('getMinimumBalanceForRentExemption', size);
   }
@@ -260,7 +260,7 @@ export class ArchiveNodeProvider {
   /**
    * Latest fee (lamports per signature)
    */
-  async fee() {
+  async fee(): Promise<bigint> {
     return BigInt((await this.recentBlockHash()).feeCalculator.lamportsPerSignature);
   }
   /**
@@ -395,7 +395,7 @@ export class ArchiveNodeProvider {
    * Returns all transaction information for address.
    * @param address - Solana address
    */
-  async transfers(address: string, perRequest = 1000) {
+  async transfers(address: string, perRequest = 1000): Promise<TxTransfers[]> {
     if (typeof address !== 'string') throw new Error(`transfers: wrong address=${address}`);
     if (!Number.isSafeInteger(perRequest))
       throw new Error(`transfers: wrong perRequest ${perRequest}, expected integer`);
@@ -416,7 +416,7 @@ export class ArchiveNodeProvider {
     sortMulti(txs, 'block', 'hash');
     return txs;
   }
-  async sendTx(tx: string) {
+  async sendTx(tx: string): Promise<any> {
     return await this.rpc.call('sendTransaction', tx, { encoding: 'base64' });
   }
 }

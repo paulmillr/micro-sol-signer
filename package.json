@@ -1,8 +1,11 @@
 {
   "name": "micro-sol-signer",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "description": "Create, sign & decode Solana transactions with minimum deps",
-  "files": ["lib", "src"],
+  "files": [
+    "lib",
+    "src"
+  ],
   "main": "lib/index.js",
   "module": "lib/esm/index.js",
   "types": "lib/index.d.ts",
@@ -25,10 +28,10 @@
     "micro-packed": "~0.6.2"
   },
   "devDependencies": {
-    "@paulmillr/jsbt": "0.1.0",
-    "micro-should": "0.4.0",
-    "prettier": "3.1.1",
-    "typescript": "5.3.2",
+    "@paulmillr/jsbt": "0.2.1",
+    "micro-should": "0.5.0",
+    "prettier": "3.3.2",
+    "typescript": "5.5.2",
     "micro-ftch": "0.4.0"
   },
   "author": "Paul Miller (https://paulmillr.com)",
@@ -42,8 +45,19 @@
     "build": "tsc && tsc -p tsconfig.esm.json",
     "lint": "prettier --check src",
     "format": "prettier --write src",
-    "test": "node test/index.test.mjs"
+    "test": "node test/index.js"
   },
-  "keywords": ["solana", "sol", "web3", "sign", "signer", "tx", "transaction", "address", "token"],
+  "sideEffects": false,
+  "keywords": [
+    "solana",
+    "sol",
+    "web3",
+    "sign",
+    "signer",
+    "tx",
+    "transaction",
+    "address",
+    "token"
+  ],
   "funding": "https://paulmillr.com/funding/"
 }
