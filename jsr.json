@@ -1,0 +1,23 @@
+{
+  "name": "@paulmillr/micro-sol-signer",
+  "version": "0.5.1-pre",
+  "exports": {
+    ".": "./src/index.ts",
+    "./net.js": "./src/net.ts"
+  },
+  "imports": {
+    "@noble/curves": "jsr:@noble/curves@^1.8.0",
+    "@noble/hashes": "jsr:@noble/hashes@^1.7.0",
+    "@scure/base": "jsr:@scure/base@^1.2.1",
+    "micro-packed": "jsr:@paulmillr/micro-packed@~0.7.1"
+  },
+  "publish": {
+    "include": [
+      "src",
+      "jsr.json",
+      "LICENSE",
+      "README.md"
+    ]
+  },
+  "license": "MIT"
+}
