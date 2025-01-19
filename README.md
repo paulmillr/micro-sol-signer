@@ -11,7 +11,9 @@ _Check out all web3 utility libraries:_ [ETH](https://github.com/paulmillr/micro
 
 ## Usage
 
-> npm install micro-sol-signer
+> `npm install micro-sol-signer`
+
+> `jsr add jsr:@paulmillr/micro-sol-signer`
 
 ```ts
 import * as sol from 'micro-sol-signer';
