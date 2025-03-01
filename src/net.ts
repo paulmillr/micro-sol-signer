@@ -176,7 +176,10 @@ function decodeData(data: Data) {
 }
 
 export class ArchiveNodeProvider {
-  constructor(private rpc: JsonrpcInterface) {}
+  private rpc: JsonrpcInterface;
+  constructor(rpc: JsonrpcInterface) {
+    this.rpc = rpc;
+  }
   private async base64Call(method: string, ...params: any[]): Promise<any | undefined> {
     const res = await this.rpc.call(method, ...params, {
       encoding: 'base64',
