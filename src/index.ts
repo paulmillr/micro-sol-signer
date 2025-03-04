@@ -1,55 +1,33 @@
 import { ed25519 } from '@noble/curves/ed25519';
-import { base58, base64, hex, utf8 } from '@scure/base';
-import { sha256 } from '@noble/hashes/sha256';
+import { base58, base64, hex } from '@scure/base';
 import * as P from 'micro-packed';
+import * as idl from './idl/index.js';
+import { Decimal, PRECISION, pubKey, shortU16 } from './idl/index.js';
+// System: solana IDLs
+import ALTIDL from './idl/alt.js';
+import ComputeBudgetIDL from './idl/computeBudget.js';
+import ConfigIDL from './idl/config.js';
+import MemoIDL from './idl/memo.js';
+import SystemIDL from './idl/system.js';
+import TokenIDL from './idl/token.js';
+import Token2022IDL from './idl/token2022.js';
 
 export type Bytes = Uint8Array;
-export const PRECISION = 9;
-export const Decimal = P.coders.decimal(PRECISION);
+export { Decimal, PRECISION, pubKey, shortU16 };
 
-// first bit -- terminator (1 -- continue, 0 -- last)
-export const shortVec = P.wrap({
-  encodeStream: (w: P.Writer, value: number) => {
-    if (!value) return w.byte(0);
-    for (; value; value >>= 7) {
-      w.bits(value > 0x7f ? 1 : 0, 1);
-      w.bits(value & 0x7f, 7);
-    }
-  },
-  decodeStream: (r: P.Reader): number => {
-    let len = 0;
-    for (let pos = 0; !r.isEnd(); pos++) {
-      const last = !r.bits(1);
-      len |= r.bits(7) << (pos * 7);
-      if (last) break;
-    }
-    return len;
-  },
-});
+const MAX_TX_SIZE = 1280 - 40 - 8;
 
-const rustString = P.string(P.padRight(8, P.U32LE, undefined));
-
-const b58 = () => {
-  const inner = P.bytes(32);
-  return P.wrap({
-    size: inner.size,
-    encodeStream: (w: P.Writer, value: string) => inner.encodeStream(w, base58.decode(value)),
-    decodeStream: (r: P.Reader): string => base58.encode(inner.decodeStream(r)),
-  });
-};
-const pubKey = b58();
-
-export const Message = P.struct({
-  requiredSignatures: P.U8,
-  readSigned: P.U8,
-  readUnsigned: P.U8,
-  keys: P.array(shortVec, pubKey),
-  blockhash: pubKey,
-  instructions: P.array(
-    shortVec,
-    P.struct({ programIdx: P.U8, keys: P.array(shortVec, P.U8), data: P.bytes(shortVec) })
-  ),
-});
+function removeUndefined<T>(obj: T): T {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map((item) => removeUndefined(item)) as unknown as T;
+  const res: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value === undefined) continue;
+    res[key] = removeUndefined(value);
+  }
+  return res as T;
+}
 
 export function validateAddress(address: string) {
   const pubkey = base58.decode(address);
@@ -71,100 +49,340 @@ const keyParams = (i: number, req: number, signed: number, unsigned: number, tot
   write: i < req - signed || (i >= req && i < total - unsigned) ? true : false,
 });
 
-export const TransactionRaw = P.struct({
-  signatures: P.array(shortVec, P.bytes(64)),
-  msg: Message,
+const MessageHeader = P.struct({
+  requiredSignatures: P.U8,
+  readSigned: P.U8,
+  readUnsigned: P.U8,
 });
-// doesn't verify signatures, just parses them
-export type Tx = { msg: Message; signatures: Record<string, Bytes> };
-// Keys position is implementation specific, Transaction.encode(Transaction.decode(tx)) not neccessary equals to tx,
-// since there is information loss for readability purposes. Use TransactionRaw in case you need exactly same encoding
-export const Transaction = P.wrap({
-  encodeStream: (w: P.Writer, value: Tx) => {
-    const { msg, signatures } = value;
-    const accounts: Record<string, { sign: boolean; write: boolean }> = {};
+
+const Instruction = P.struct({
+  programIdx: P.U8,
+  keys: P.array(shortU16, P.U8),
+  data: P.bytes(shortU16),
+});
+
+const MessageLegacy = P.struct({
+  header: MessageHeader,
+  keys: P.array(shortU16, pubKey),
+  blockhash: pubKey,
+  instructions: P.array(shortU16, Instruction),
+});
+
+const MessageAddressTableLookup = P.struct({
+  account: pubKey,
+  writableIndexes: P.array(shortU16, P.U8),
+  readonlyIndexes: P.array(shortU16, P.U8),
+});
+
+const MessageV0 = P.struct({
+  header: MessageHeader,
+  keys: P.array(shortU16, pubKey),
+  blockhash: pubKey,
+  instructions: P.array(shortU16, Instruction),
+  ALT: P.array(shortU16, MessageAddressTableLookup),
+});
+
+const MessageVersion: P.CoderType<number | 'legacy'> = P.wrap({
+  encodeStream(w, value) {
+    if (value === 'legacy') {
+      // legacy is empty!
+    } else if (typeof value === 'number') {
+      if (value < 0 || value > 127) throw new Error('Invalid message version');
+      w.byte(0x80 | value);
+    } else throw new Error('Invalid message version type');
+  },
+  decodeStream(r) {
+    const b = r.byte(true);
+    if ((b & 0x80) === 0) return 'legacy';
+    r.byte(); // move cursor
+    return b & 0x7f;
+  },
+});
+
+export const MessageRaw = P.tag(MessageVersion, {
+  legacy: MessageLegacy,
+  0: MessageV0,
+});
+
+type Version = P.UnwrapCoder<typeof MessageRaw>['TAG'];
+
+const getAccountKeys = (msg: P.UnwrapCoder<typeof MessageRaw>) => {
+  const accounts: Account[] = [];
+  for (let i = 0; i < msg.data.keys.length; i++) {
+    accounts.push({
+      address: msg.data.keys[i],
+      ...keyParams(
+        i,
+        msg.data.header.requiredSignatures,
+        msg.data.header.readSigned,
+        msg.data.header.readUnsigned,
+        msg.data.keys.length
+      ),
+    });
+  }
+  if (!accounts.length) throw new Error('SOL.tx: empty accounts array');
+  if (msg.TAG !== 'legacy') {
+    for (const alt of msg.data.ALT) {
+      for (const idx of alt.writableIndexes)
+        accounts.push({ address: `${alt.account}:${idx}`, write: true, sign: false });
+    }
+    for (const alt of msg.data.ALT) {
+      for (const idx of alt.readonlyIndexes)
+        accounts.push({ address: `${alt.account}:${idx}`, write: false, sign: false });
+    }
+  }
+  return accounts;
+};
+
+type MessageType = {
+  version: P.UnwrapCoder<typeof MessageVersion>;
+  feePayer: string;
+  blockhash: string;
+  instructions: Instruction[];
+};
+
+const MessageCoder: P.Coder<P.UnwrapCoder<typeof MessageRaw>, MessageType> = {
+  encode(msg) {
+    const accounts: Account[] = getAccountKeys(msg);
+    return {
+      version: msg.TAG,
+      feePayer: accounts[0].address,
+      blockhash: msg.data.blockhash,
+      instructions: msg.data.instructions.map((i: any) => ({
+        program: accounts[i.programIdx].address,
+        keys: i.keys.map((j: any) => accounts[j]),
+        data: i.data,
+      })),
+    };
+  },
+  decode(to) {
+    const { version, feePayer, blockhash, instructions } = to;
+    const accounts: Map<string, { sign: boolean; write: boolean }> = new Map();
+    // contract -> idx -> isWrite
+    const ALTaccounts: Record<string, Map<string, boolean>> = {};
     const add = (address: string, sign: boolean, write: boolean) => {
-      let acc = accounts[address] || (accounts[address] = { sign: false, write: false });
+      if (address.includes(':')) {
+        if (version === 'legacy')
+          throw new Error('SOL.tx: cannot use AddressLookupTable addresses in legacy tx');
+        if (sign) throw new Error('SOL.tx: cannot sign with address for AddressLookupTable');
+        const [contract, idx] = address.split(':');
+        if (!ALTaccounts[contract]) ALTaccounts[contract] = new Map();
+        // JS quirk: Object keys is always insert order unless they are "numeric" (even if string!)
+        // so '1' will always be on top, breaking insert order guarantess and introducing fingerprinting in tx
+        // This also breaks encode(decode). Fortunately we have Map-s
+        if (!ALTaccounts[contract].has(idx)) ALTaccounts[contract].set(idx, write);
+        return;
+      }
+      if (!accounts.has(address)) accounts.set(address, { sign: false, write: false });
+      const acc = accounts.get(address)!;
       acc.write ||= write;
       acc.sign ||= sign;
     };
-    add(msg.feePayer, true, true);
-    for (let i of msg.instructions) for (let k of i.keys) add(k.address, k.sign, k.write);
-    // Same loop as above, but cannot be merged since it will change implementation specific key positions inside transaction.
-    // This doesn't invalidate transaction, but can be used for fingerprinting.
-    for (let i of msg.instructions) add(i.program, false, false);
-    const _keys = Object.keys(accounts);
+    add(feePayer, true, true);
+    for (const i of instructions) {
+      add(i.program, false, false);
+      for (let k of i.keys) add(k.address, k.sign, k.write);
+    }
+    const _keys = Array.from(accounts.keys());
     // [feePayer, ...sign+write, ...sign+read, ...nosign+write, ...nosign+read]
     const keys = [
-      msg.feePayer,
-      ..._keys.filter((i) => accounts[i].sign && accounts[i].write && i !== msg.feePayer),
-      ..._keys.filter((i) => accounts[i].sign && !accounts[i].write),
-      ..._keys.filter((i) => !accounts[i].sign && accounts[i].write),
-      ..._keys.filter((i) => !accounts[i].sign && !accounts[i].write),
+      feePayer,
+      ..._keys.filter((i) => accounts.get(i)!.sign && accounts.get(i)!.write && i !== feePayer),
+      ..._keys.filter((i) => accounts.get(i)!.sign && !accounts.get(i)!.write),
+      ..._keys.filter((i) => !accounts.get(i)!.sign && accounts.get(i)!.write),
+      ..._keys.filter((i) => !accounts.get(i)!.sign && !accounts.get(i)!.write),
     ];
     let requiredSignatures = 0;
     let readSigned = 0;
     let readUnsigned = 0;
     for (let k of keys) {
-      if (accounts[k].sign) requiredSignatures++;
-      if (accounts[k].write) continue;
-      if (accounts[k].sign) readSigned++;
+      if (accounts.get(k)!.sign) requiredSignatures++;
+      if (accounts.get(k)!.write) continue;
+      if (accounts.get(k)!.sign) readSigned++;
       else readUnsigned++;
     }
-    TransactionRaw.encodeStream(w, {
-      signatures: keys
-        .filter((i) => accounts[i].sign)
-        .map((i) => signatures[i] || new Uint8Array(64)),
-      msg: {
-        requiredSignatures,
-        readSigned,
-        readUnsigned,
-        keys,
-        // indexOf potentially can be slow, but for most tx there will be ~3-5 keys, so doesn't matter much
-        instructions: msg.instructions.map((i) => ({
-          programIdx: keys.indexOf(i.program),
-          keys: i.keys.map((j) => keys.indexOf(j.address)),
-          data: i.data,
-        })),
-        blockhash: msg.blockhash,
-      },
-    });
-  },
-  decodeStream: (r: P.Reader): Tx => {
-    const { signatures, msg } = TransactionRaw.decodeStream(r);
-    if (signatures.length !== msg.requiredSignatures)
-      throw new Error('SOL.tx: wrong signatures length');
-    if (msg.keys.length < signatures.length) throw new Error('SOL.tx: invalid keys length');
-    const sigs: Tx['signatures'] = {};
-    for (let i = 0; i < signatures.length; i++) sigs[msg.keys[i]] = signatures[i];
-    let accounts: Account[] = [];
-    for (let i = 0; i < msg.keys.length; i++) {
-      accounts.push({
-        address: msg.keys[i],
-        ...keyParams(i, msg.requiredSignatures, msg.readSigned, msg.readUnsigned, msg.keys.length),
-      });
+    const header = { requiredSignatures, readSigned, readUnsigned };
+    const ALT: P.UnwrapCoder<typeof MessageAddressTableLookup>[] = [];
+    if (version !== 'legacy') {
+      const contractNames = Object.keys(ALTaccounts).sort();
+      for (const account of contractNames) {
+        const writableIndexes: number[] = [];
+        const readonlyIndexes: number[] = [];
+        for (const k of ALTaccounts[account].keys()) {
+          (ALTaccounts[account].get(k) ? writableIndexes : readonlyIndexes).push(+k);
+        }
+        ALT.push({ account, writableIndexes, readonlyIndexes });
+      }
     }
-    if (!accounts.length) throw new Error('SOL.tx: empty accounts array');
+    const accountKeys = getAccountKeys({ TAG: version, data: { header, keys, ALT } } as any);
+    const accountMap = Object.fromEntries(accountKeys.map((i, j) => [i.address, j]));
+    const getKey = (address: string) => {
+      const value = accountMap[address];
+      if (value === undefined) throw new Error('SOL.tx: unknown address: ' + address);
+      return value;
+    };
     return {
-      msg: {
-        feePayer: accounts[0].address,
-        blockhash: msg.blockhash,
-        instructions: msg.instructions.map((i) => ({
-          program: accounts[i.programIdx].address,
-          keys: i.keys.map((j) => accounts[j]),
+      TAG: version,
+      data: {
+        header,
+        keys,
+        instructions: instructions.map((i: any) => ({
+          programIdx: getKey(i.program),
+          keys: i.keys.map((i: any) => getKey(i.address)),
           data: i.data,
         })),
+        blockhash,
+        ALT: ALT,
       },
-      signatures: sigs,
+    } as P.UnwrapCoder<typeof MessageRaw>;
+  },
+};
+
+export const Message = P.apply(MessageRaw, MessageCoder);
+
+export const TransactionRaw = P.struct({
+  signatures: P.array(shortU16, P.bytes(64)),
+  msg: MessageRaw,
+});
+
+export const Transaction = P.apply(TransactionRaw, {
+  encode(from) {
+    const { signatures, msg } = from;
+    if (signatures.length !== msg.data.header.requiredSignatures)
+      throw new Error('SOL.tx: not enough signatures');
+    return {
+      signatures: Object.fromEntries(signatures.map((i, j) => [msg.data.keys[j], i])),
+      msg: MessageCoder.encode(msg),
     };
+  },
+  decode(to) {
+    const raw = MessageCoder.decode(to.msg);
+    const signatures = [];
+    for (let i = 0; i < raw.data.header.requiredSignatures; i++) {
+      const address = raw.data.keys[i];
+      const sig = to.signatures[address];
+      // NOTE: this will break on unsigned transactions! Where we can check this?
+      // if (sig === undefined) throw new Error('SOL.tx: missing signature for address: ' + address);
+      signatures.push(sig === undefined ? new Uint8Array(64) : sig);
+    }
+    return { signatures, msg: raw };
   },
 });
 
-type KeyOpt = { sign: boolean; write: boolean; address?: string };
-// Sort of ABI stuff, which allows to define encode/decode for programs easily
-type Method<T, K extends Record<string, KeyOpt>> = {
-  coder: P.BytesCoder<T>;
-  keys: K;
+// Tables is like {contract: [addr1, addr2]} (from archive.getAddressLookupTable().addresses)
+export function AddressLookupTables(tables: Record<string, string[]>) {
+  // XXX:1 -> YYY
+  const direct = new Map();
+  // YYY -> XXX:1
+  const reverse = new Map();
+  for (const k in tables) {
+    const t = tables[k];
+    for (let i = 0; i < t.length; i++) {
+      const contract = `${k}:${i}`;
+      const address = t[i];
+      direct.set(contract, address);
+      // Order of contracts == priority
+      if (!reverse.has(address)) reverse.set(address, contract);
+    }
+  }
+  const mapInstructions = (
+    tx: P.UnwrapCoder<typeof Transaction>,
+    fn: (address: string) => string
+  ) => {
+    const instructions = tx.msg.instructions.map((i) => ({
+      program: fn(i.program),
+      keys: i.keys.map((j) => ({ ...j, address: fn(j.address) })),
+      data: i.data,
+    }));
+    return { signatures: tx.signatures, msg: { ...tx.msg, instructions } };
+  };
+  return {
+    // resolve addresses in transaction using provided tables
+    resolve: (tx: P.UnwrapCoder<typeof Transaction>) =>
+      mapInstructions(tx, (k) => (direct.has(k) ? direct.get(k)! : k)),
+    // compresses addresses using tables
+    compress(tx: P.UnwrapCoder<typeof Transaction>) {
+      const blacklist = new Set();
+      blacklist.add(tx.msg.feePayer);
+      for (const i of tx.msg.instructions) {
+        for (const k of i.keys) if (k.sign) blacklist.add(k.address);
+      }
+      return mapInstructions(tx, (k) =>
+        !reverse.has(k) || blacklist.has(k) ? k : reverse.get(k)!
+      );
+    },
+  };
+}
+
+export const PROGRAMS = {
+  System: idl.defineIDL(SystemIDL),
+  Token: idl.defineIDL(TokenIDL),
+  Token2022: idl.defineIDL(Token2022IDL),
+  ALT: idl.defineIDL(ALTIDL),
+  ComputeBudget: idl.defineIDL(ComputeBudgetIDL),
+  Config: idl.defineIDL(ConfigIDL),
+  Memo: idl.defineIDL(MemoIDL),
+};
+// Old API compat
+export const sys = PROGRAMS.System.system.instructions.encoders;
+export const token = PROGRAMS.Token.token.instructions.encoders;
+// TODO: The inferred type of this node exceeds the maximum length the compiler will serialize. An explicit type annotation is needed.
+export const token2022 = PROGRAMS.Token2022['token-2022'].instructions.encoders as any;
+export const associatedToken = PROGRAMS.Token.associatedToken.instructions.encoders;
+
+export const SYS_PROGRAM = PROGRAMS.System.system.contract;
+export const TOKEN_PROGRAM = PROGRAMS.Token.token.contract;
+export const TOKEN_PROGRAM2022 = PROGRAMS.Token2022['token-2022'].contract;
+export const ASSOCIATED_TOKEN_PROGRAM = PROGRAMS.Token.associatedToken.contract;
+
+export const tokenAddress = PROGRAMS.Token.associatedToken.pdas.associatedToken;
+export const TokenAccount = PROGRAMS.Token.token.accounts.decoder;
+export const AddressTableLookupData = PROGRAMS.ALT.addressLookupTable.accounts.decoder;
+
+export const isOnCurve = idl.isOnCurve;
+export const programAddress = idl.programAddress;
+
+const ACCOUNTS_DECODE: Record<string, any> = {
+  [SYS_PROGRAM]: PROGRAMS.System.system.accounts.decoder,
+  [TOKEN_PROGRAM]: PROGRAMS.Token.token.accounts.decoder,
+  [TOKEN_PROGRAM2022]: PROGRAMS.Token2022['token-2022'].accounts.decoder,
+  [ASSOCIATED_TOKEN_PROGRAM]: PROGRAMS.Token.associatedToken.accounts.decoder,
+  [PROGRAMS.ALT.addressLookupTable.contract]: PROGRAMS.ALT.addressLookupTable.accounts.decoder,
+  [PROGRAMS.ComputeBudget.computeBudget.contract]:
+    PROGRAMS.ComputeBudget.computeBudget.accounts.decoder,
+  [PROGRAMS.Config.solanaConfig.contract]: PROGRAMS.Config.solanaConfig.accounts.decoder,
+  [PROGRAMS.Memo.memo.contract]: PROGRAMS.Memo.memo.accounts.decoder,
+};
+export function decodeAccount(contract: string, data: Bytes): unknown {
+  if (ACCOUNTS_DECODE[contract] === undefined) throw new Error('unknown contract');
+  return removeUndefined(ACCOUNTS_DECODE[contract](data));
+}
+
+const REGISTRY: Record<string, any> = {
+  [SYS_PROGRAM]: PROGRAMS.System.system.instructions.decoder,
+  [TOKEN_PROGRAM]: PROGRAMS.Token.token.instructions.decoder,
+  [TOKEN_PROGRAM2022]: PROGRAMS.Token2022['token-2022'].instructions.decoder,
+  [ASSOCIATED_TOKEN_PROGRAM]: PROGRAMS.Token.associatedToken.instructions.decoder,
+  [PROGRAMS.ALT.addressLookupTable.contract]: PROGRAMS.ALT.addressLookupTable.instructions.decoder,
+  [PROGRAMS.ComputeBudget.computeBudget.contract]:
+    PROGRAMS.ComputeBudget.computeBudget.instructions.decoder,
+  [PROGRAMS.Config.solanaConfig.contract]: PROGRAMS.Config.solanaConfig.instructions.decoder,
+  [PROGRAMS.Memo.memo.contract]: PROGRAMS.Memo.memo.instructions.decoder,
+};
+export function parseInstructionRaw(instruction: Instruction): unknown {
+  if (REGISTRY[instruction.program] === undefined) throw new Error('unknown contract');
+  return removeUndefined(REGISTRY[instruction.program](instruction));
+}
+
+export const CONTRACTS: Record<string, any> = {
+  [SYS_PROGRAM]: PROGRAMS.System.system,
+  [TOKEN_PROGRAM]: PROGRAMS.Token.token,
+  [TOKEN_PROGRAM2022]: PROGRAMS.Token2022['token-2022'],
+  [ASSOCIATED_TOKEN_PROGRAM]: PROGRAMS.Token.associatedToken,
+  [PROGRAMS.ALT.addressLookupTable.contract]: PROGRAMS.ALT.addressLookupTable,
+  [PROGRAMS.ComputeBudget.computeBudget.contract]: PROGRAMS.ComputeBudget.computeBudget,
+  [PROGRAMS.Config.solanaConfig.contract]: PROGRAMS.Config.solanaConfig,
+  [PROGRAMS.Memo.memo.contract]: PROGRAMS.Memo.memo,
 };
 
 export type TokenInfo = {
@@ -172,553 +390,62 @@ export type TokenInfo = {
   decimals: number;
   price?: number;
 };
-
 export type TokenList = Record<string, TokenInfo>;
-
-type MethodHint<T extends Method<any, any>> = T & {
-  hint?: (o: MethodData<T>, t: TokenList) => string;
-};
-
-// Remove keys with value 'never'
-type FilterKeys<T> = Pick<T, { [K in keyof T]: T[K] extends never ? never : K }[keyof T]>;
-
-type MethodData<T extends Method<any, any>> = P.UnwrapCoder<T['coder']> &
-  FilterKeys<{ [A in keyof T['keys']]: T['keys'][A]['address'] extends string ? never : string }>;
-
-type Program<T extends Record<string, Method<any, any>>> = {
-  [K in keyof T]: (data: MethodData<T[K]>) => Instruction;
-};
-
-const registry: Record<string, (instr: Instruction, tl: TokenList) => MethodData<any>> = {};
-// Basic ABI thing. There is IDL which is kinda ABI, but not official and system accounts doesn't have offical types for it.
-// Later we can add support to conversion IDL -> defineProgram
-export function defineProgram<T extends Record<string, MethodHint<any>>>(
-  address: string,
-  tagType: P.CoderType<number>,
-  methods: T
-): Program<T> {
-  if (registry[address]) throw new Error('SOL: program for this address already defined');
-  const variants = P.map(
-    tagType,
-    Object.keys(methods).reduce((acc, k, i) => ({ ...acc, [k]: i }), {})
-  );
-  const coders: any = Object.keys(methods).reduce(
-    (acc, k) => ({ ...acc, [k]: methods[k].coder }),
-    {}
-  );
-  const mainCoder = P.tag(variants, coders);
-  registry[address] = (instr: Instruction, tl: TokenList): MethodData<any> => {
-    if (instr.program !== address)
-      throw new Error('SOL.parseInstruction: Wrong instruction program address');
-    const { TAG, data } = mainCoder.decode(instr.data);
-    // Should be close to node parser (https://github.com/solana-labs/solana/tree/master/transaction-status/src)
-    const res: Record<string, any> = { type: TAG, info: data };
-    const keys = Object.keys(methods[TAG].keys);
-    if (keys.length !== instr.keys.length)
-      throw new Error('SOL.parseInstruction: Keys length mismatch');
-    for (let i = 0; i < keys.length; i++) {
-      const key = keys[i];
-      if (methods[TAG].keys[key].address) {
-        if (methods[TAG].keys[key].address !== instr.keys[i].address) {
-          throw new Error(
-            `SOL.parseInstruction(${address}/${TAG}): Invalid constant address for key exp=${methods[TAG].keys[key].address} got=${instr.keys[i].address}`
-          );
-        }
-        continue;
-      }
-      res.info[keys[i]] = instr.keys[i].address;
-    }
-    if (methods[TAG].hint) res.hint = methods[TAG].hint(data, tl);
-    return res as MethodData<any>;
-  };
-  const program: Program<T> = {} as Program<T>;
-  for (const m in methods) {
-    program[m] = (data: MethodData<(typeof methods)[typeof m]>): Instruction => ({
-      program: address,
-      data: mainCoder.encode({ TAG: m, data }),
-      keys: Object.keys(methods[m].keys).map((name) => {
-        let { sign, write, address } = methods[m].keys[name];
-        address ||= (data as any)[name];
-        validateAddress(address);
-        return { address, sign, write };
-      }),
-    });
-  }
-  return program;
-}
-
-export function parseInstruction(instr: Instruction, tl: TokenList): any {
-  if (!registry[instr.program]) return;
-  return registry[instr.program](instr, tl);
-}
-
-export const SYS_RECENT_BLOCKHASHES = 'SysvarRecentB1ockHashes11111111111111111111';
-export const SYS_RENT = 'SysvarRent111111111111111111111111111111111';
-export const SYS_PROGRAM = '11111111111111111111111111111111';
-export const sys = defineProgram(SYS_PROGRAM, P.U32LE, {
-  createAccount: {
-    coder: P.struct({ lamports: P.U64LE, space: P.U64LE, owner: pubKey }),
-    keys: {
-      source: { sign: true, write: true },
-      newAccount: { sign: true, write: true },
-    },
-    hint: (o: {
-      source: string;
+const tokenName = (address: string, tl: TokenList) => tl[address]?.symbol || address;
+const hints: Record<string, Record<string, (o: any, tl: TokenList) => string>> = {
+  [SYS_PROGRAM]: {
+    createAccount: (o: {
+      payer: string;
       newAccount: string;
       lamports: bigint;
       space: bigint;
-      owner: string;
+      programAddress: string;
     }) =>
       `Create new account=${o.newAccount} with balance of ${Decimal.encode(
         o.lamports
-      )} and owner program ${o.owner}, using funding account ${o.source}`,
-  },
-  assign: {
-    coder: P.struct({ owner: pubKey }),
-    keys: { account: { sign: true, write: true } },
-    hint: (o: { account: string; owner: string }) =>
-      `Assign account=${o.account} to owner program=${o.owner}`,
-  },
-  transfer: {
-    coder: P.struct({ lamports: P.U64LE }),
-    keys: { source: { sign: true, write: true }, destination: { sign: false, write: true } },
-    hint: (o: { lamports: bigint; source: string; destination: string }) =>
-      `Transfer ${Decimal.encode(o.lamports)} SOL from ${o.source} to ${o.destination}`,
-  },
-  createAccountWithSeed: {
-    coder: P.struct({
-      base: pubKey,
-      seed: rustString,
-      lamports: P.U64LE,
-      space: P.U64LE,
-      owner: pubKey,
-    }),
-    keys: {
-      source: { sign: true, write: true },
-      newAccount: { sign: false, write: true },
-      base: { sign: true, write: false },
-    },
-  },
-  advanceNonce: {
-    coder: P.struct({}),
-    keys: {
-      nonceAccount: { sign: false, write: true },
-      _recent_bh: { address: SYS_RECENT_BLOCKHASHES, sign: false, write: false },
-      nonceAuthority: { sign: true, write: false },
-    },
-    hint: (o: { nonceAccount: string; nonceAuthority: string }) =>
+      )} and owner program ${o.programAddress}, using funding account ${o.payer}`,
+    assign: (o: { account: string; programAddress: string }) =>
+      `Assign account=${o.account} to owner program=${o.programAddress}`,
+    transferSol: (o: { amount: bigint; source: string; destination: string }) =>
+      `Transfer ${Decimal.encode(o.amount)} SOL from ${o.source} to ${o.destination}`,
+    advanceNonceAccount: (o: { nonceAccount: string; nonceAuthority: string }) =>
       `Consume nonce in nonce account=${o.nonceAccount} (owner: ${o.nonceAuthority})`,
-  },
-  withdrawFromNonce: {
-    coder: P.struct({ lamports: P.U64LE }),
-    keys: {
-      nonceAccount: { sign: false, write: true },
-      destination: { sign: false, write: true },
-      _recent_bh: { address: SYS_RECENT_BLOCKHASHES, sign: false, write: false },
-      _rent: { address: SYS_RENT, sign: false, write: false },
-      nonceAuthority: { sign: true, write: false },
-    },
-    hint: (o: {
-      lamports: bigint;
-      destination: string;
+    withdrawNonceAccount: (o: {
+      withdrawAmount: bigint;
+      recipientAccount: string;
       nonceAccount: string;
       nonceAuthority: string;
     }) =>
-      `Withdraw ${Decimal.encode(o.lamports)} SOL from nonce account=${o.nonceAccount} (owner: ${
+      `Withdraw ${Decimal.encode(o.withdrawAmount)} SOL from nonce account=${o.nonceAccount} (owner: ${
         o.nonceAuthority
-      }) to ${o.destination}`,
+      }) to ${o.recipientAccount}`,
+    authorizeNonceAccount: (o: {
+      nonceAccount: string;
+      nonceAuthority: string;
+      newNonceAuthority: string;
+    }) =>
+      `Change owner of nonce account=${o.nonceAccount} from ${o.nonceAuthority} to ${o.newNonceAuthority}`,
   },
-  initializeNonce: {
-    coder: P.struct({ nonceAuthority: pubKey }),
-    keys: {
-      nonceAccount: { sign: false, write: true },
-      _recent_bh: { address: SYS_RECENT_BLOCKHASHES, sign: false, write: false },
-      _rent: { address: SYS_RENT, sign: false, write: false },
-    },
-  },
-  authorizeNonce: {
-    coder: P.struct({ newAuthorized: pubKey }),
-    keys: {
-      nonceAccount: { sign: false, write: true },
-      nonceAuthority: { sign: true, write: false },
-    },
-    hint: (o: { nonceAccount: string; nonceAuthority: string; newAuthorized: string }) =>
-      `Change owner of nonce account=${o.nonceAccount} from ${o.nonceAuthority} to ${o.newAuthorized}`,
-  },
-  allocate: {
-    coder: P.struct({ space: P.U64LE }),
-    keys: {
-      account: { sign: true, write: true },
-    },
-  },
-  allocateWithSeed: {
-    coder: P.struct({
-      base: pubKey,
-      seed: rustString,
-      space: P.U64LE,
-      owner: pubKey,
-    }),
-    keys: {
-      account: { sign: false, write: true },
-      base: { sign: true, write: false },
-    },
-  },
-  assignWithSeed: {
-    coder: P.struct({
-      base: pubKey,
-      seed: rustString,
-      owner: pubKey,
-    }),
-    keys: {
-      account: { sign: false, write: true },
-      base: { sign: true, write: false },
-    },
-  },
-  transferWithSeed: {
-    coder: P.struct({
-      lamports: P.U64LE,
-      sourceSeed: rustString,
-      sourceOwner: pubKey,
-    }),
-    keys: {
-      source: { sign: false, write: true },
-      sourceBase: { sign: true, write: false },
-      destination: { sign: false, write: true },
-    },
-  },
-});
-
-// Type tests
-const assertType = <T>(_value: T) => {};
-assertType<(o: { lamports: bigint; source: string; destination: string }) => Instruction>(
-  sys.transfer
-);
-assertType<(o: { lamports: bigint; nonceAccount: string; nonceAuthority: string }) => Instruction>(
-  sys.advanceNonce
-);
-
-const authorityType = P.map(P.U8, {
-  MintTokens: 0,
-  FreezeAccount: 1,
-  AccountOwner: 2,
-  CloseAccount: 3,
-});
-
-const tokenName = (address: string, tl: TokenList) => tl[address]?.symbol || address;
-
-export const TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
-export const token = defineProgram(TOKEN_PROGRAM, P.U8, {
-  initializeMint: {
-    coder: P.struct({
-      decimals: P.U8,
-      mintAuthority: pubKey,
-      freezeAuthority: P.optional(P.bool, pubKey, '11111111111111111111111111111111'),
-    }),
-    keys: {
-      mint: { sign: false, write: true },
-      _rent: { address: SYS_RENT, sign: false, write: false },
-    },
-  },
-  initializeAccount: {
-    coder: P.struct({}),
-    keys: {
-      account: { sign: false, write: true },
-      mint: { sign: false, write: false },
-      owner: { sign: false, write: false },
-      _rent: { address: SYS_RENT, sign: false, write: false },
-    },
-    hint: (o: { owner: string; account: string; mint: string }, tl: TokenList) =>
-      `Initialize token account=${o.account} with owner=${o.owner} token=${tokenName(o.mint, tl)}`,
-  },
-  // TODO: multisig support?
-  initializeMultisig: {
-    coder: P.struct({ m: P.U8 }),
-    keys: {
-      account: { sign: false, write: true },
-      _rent: { address: SYS_RENT, sign: false, write: false },
-    },
-    hint: (o: { account: string; m: number }, _: TokenList) =>
-      `Initialize multi-sig token account=${o.account} with signatures=${o.m}`,
-  },
-  transfer: {
-    coder: P.struct({ amount: P.U64LE }),
-    keys: {
-      source: { sign: false, write: true },
-      destination: { sign: false, write: true },
-      owner: { sign: true, write: false },
-    },
-    hint: (
-      o: { amount: bigint; source: string; destination: number; owner: string },
-      _: TokenList
-    ) =>
-      `Transfer ${o.amount} from token account=${o.source} of owner=${o.owner} to ${o.destination}`,
-  },
-  approve: {
-    coder: P.struct({ amount: P.U64LE }),
-    keys: {
-      account: { sign: false, write: true },
-      delegate: { sign: false, write: false },
-      owner: { sign: true, write: false },
-    },
-    hint: (o: { amount: bigint; account: string; delegate: number; owner: string }, _: TokenList) =>
-      `Approve authority of delegate=${o.delegate} over tokens on account=${o.account} on behalf of owner=${o.owner}`,
-  },
-  revoke: {
-    coder: P.struct({}),
-    keys: {
-      account: { sign: false, write: true },
-      owner: { sign: true, write: false },
-    },
-    hint: (o: { amount: bigint; account: string; owner: string }, _: TokenList) =>
-      `Revoke delegate's authority over tokens on account=${o.account} on behalf of owner=${o.owner}`,
-  },
-  setAuthority: {
-    coder: P.struct({
-      authorityType,
-      newAuthority: P.optional(P.bool, pubKey, '11111111111111111111111111111111'),
-    }),
-    keys: {
-      account: { sign: false, write: true },
-      currentAuthority: { sign: true, write: false },
-    },
-    hint: (
-      o: { newAuthority: string; account: string; currentAuthority: string; authorityType: string },
-      _: TokenList
-    ) =>
-      `Sets a new authority=${o.newAuthority} of a mint or account=${o.account}. Current authority=${o.currentAuthority}. Authority Type: ${o.authorityType}`,
-  },
-  mintTo: {
-    coder: P.struct({ amount: P.U64LE }),
-    keys: {
-      mint: { sign: false, write: true },
-      dest: { sign: false, write: true },
-      authority: { sign: true, write: false },
-    },
-  },
-  burn: {
-    coder: P.struct({ amount: P.U64LE }),
-    keys: {
-      account: { sign: false, write: true },
-      mint: { sign: false, write: true },
-      owner: { sign: true, write: false },
-    },
-    hint: (o: { amount: bigint; account: string; mint: string; owner: string }, _: TokenList) =>
-      `Burn ${o.amount} tokens from account=${o.account} of owner=${o.owner} mint=${o.mint}`,
-  },
-  closeAccount: {
-    coder: P.struct({}),
-    keys: {
-      account: { sign: false, write: true },
-      dest: { sign: false, write: true },
-      owner: { sign: true, write: false },
-    },
-    hint: (o: { account: string; dest: string; owner: string }, _: TokenList) =>
-      `Close token account=${o.account} of owner=${o.owner}, transferring all its SOL to destionation account=${o.dest}`,
-  },
-  freezeAccount: {
-    coder: P.struct({}),
-    keys: {
-      account: { sign: false, write: true },
-      mint: { sign: false, write: true },
-      authority: { sign: true, write: false },
-    },
-    hint: (o: { account: string; authority: string; mint: string }, _: TokenList) =>
-      `Freeze token account=${o.account} of mint=${o.mint} using freeze_authority=${o.authority}`,
-  },
-  thawAccount: {
-    coder: P.struct({}),
-    keys: {
-      account: { sign: false, write: true },
-      mint: { sign: false, write: false },
-      authority: { sign: true, write: false },
-    },
-    hint: (o: { account: string; authority: string; mint: string }, _: TokenList) =>
-      `Thaw a frozne token account=${o.account} of mint=${o.mint} using freeze_authority=${o.authority}`,
-  },
-  transferChecked: {
-    coder: P.struct({ amount: P.U64LE, decimals: P.U8 }),
-    keys: {
-      source: { sign: false, write: true },
-      mint: { sign: false, write: false },
-      destination: { sign: false, write: true },
-      owner: { sign: true, write: false },
-    },
-    hint: (
-      o: {
-        amount: bigint;
-        source: string;
-        destination: number;
-        owner: string;
-        decimals: number;
-        mint: string;
-      },
+  [ASSOCIATED_TOKEN_PROGRAM]: {
+    createAssociatedToken: (
+      o: { ata: string; owner: string; mint: string; payer: string },
       tl: TokenList
     ) =>
-      `Transfer ${P.coders.decimal(o.decimals).encode(o.amount)} ${tokenName(
-        o.mint,
-        tl
-      )} from token account=${o.source} of owner=${o.owner} to ${o.destination}`,
-  },
-  approveChecked: {
-    coder: P.struct({ amount: P.U64LE, decimals: P.U8 }),
-    keys: {
-      source: { sign: false, write: true },
-      mint: { sign: false, write: false },
-      delegate: { sign: false, write: false },
-      owner: { sign: true, write: false },
-    },
-    hint: (
-      o: {
-        amount: bigint;
-        source: string;
-        delegate: number;
-        owner: string;
-        decimals: number;
-        mint: string;
-      },
-      tl: TokenList
-    ) =>
-      `Approve delgate=${o.delegate} authority on behalf account=${o.source} owner=${
+      `Initialize associated token account=${o.ata} with owner=${
         o.owner
-      } over ${P.coders.decimal(o.decimals).encode(o.amount)} ${tokenName(o.mint, tl)}`,
+      } for token=${tokenName(o.mint, tl)}, payed by ${o.payer}`,
   },
-  mintToChecked: {
-    coder: P.struct({ amount: P.U64LE, decimals: P.U8 }),
-    keys: {
-      mint: { sign: false, write: true },
-      dest: { sign: false, write: true },
-      authority: { sign: true, write: false },
-    },
-    hint: (
-      o: {
-        amount: bigint;
-        dest: string;
-        authority: string;
-        mint: string;
-        decimals: number;
-      },
-      tl: TokenList
-    ) =>
-      `Mint new tokens (${P.coders.decimal(o.decimals).encode(o.amount)} ${tokenName(
-        o.mint,
-        tl
-      )}) to account=${o.dest} using authority=${o.authority}`,
-  },
-  burnChecked: {
-    coder: P.struct({ amount: P.U64LE, decimals: P.U8 }),
-    keys: {
-      mint: { sign: false, write: true },
-      account: { sign: false, write: true },
-      owner: { sign: true, write: false },
-    },
-    hint: (
-      o: {
-        amount: bigint;
-        account: string;
-        owner: string;
-        mint: string;
-        decimals: number;
-      },
-      tl: TokenList
-    ) =>
-      `Burn tokens (${P.coders.decimal(o.decimals).encode(o.amount)} ${tokenName(
-        o.mint,
-        tl
-      )}) on account=${o.account} of owner=${o.owner}`,
-  },
-  initializeAccount2: {
-    coder: P.struct({ owner: pubKey }),
-    keys: {
-      account: { sign: false, write: true },
-      mint: { sign: false, write: false },
-      _rent: { address: SYS_RENT, sign: false, write: false },
-    },
-    hint: (o: { owner: string; account: string; mint: string }, tl: TokenList) =>
-      `Initialize token account=${o.account} with owner=${o.owner} token=${tokenName(o.mint, tl)}`,
-  },
-  syncNative: {
-    coder: P.struct({}),
-    keys: { nativeAccount: { sign: false, write: true } },
-    hint: (o: { nativeAccount: string }) =>
-      `Sync SOL balance for wrapped account ${o.nativeAccount}`,
-  },
-});
+};
 
-export const NonceAccount = P.struct({
-  version: P.U32LE,
-  state: P.U32LE,
-  authority: pubKey,
-  nonce: pubKey,
-  lamportPerSignature: P.U64LE,
-});
-
-function mod(a: bigint, b: bigint = ed25519.CURVE.Fp.ORDER) {
-  const res = a % b;
-  return res >= 0n ? res : b + res;
-}
-
-export function isOnCurve(bytes: Bytes | string) {
-  if (typeof bytes === 'string') bytes = base58.decode(bytes);
-  try {
-    // noble-ed25519 checks that publicKey is < P, but dalek (ed25519-dalek.CompressedEdwardsY) is not, so we do modulo here.
-    // first bit in last byte is x oddity flag
-    const last = bytes[31];
-    const normedLast = last & ~0x80;
-    const normed = Uint8Array.from(Array.from(bytes.slice(0, 31)).concat(normedLast));
-    const modBytes = P.U256LE.encode(mod(P.U256LE.decode(normed)));
-    if ((last & 0x80) !== 0) modBytes[31] |= 0x80;
-    ed25519.ExtendedPoint.fromHex(modBytes);
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
-
-export function programAddress(program: string, ...seeds: Bytes[]) {
-  let seed = P.utils.concatBytes(...seeds);
-  const noncePos = seed.length;
-  seed = P.utils.concatBytes(
-    seed,
-    new Uint8Array([0]),
-    base58.decode(program),
-    utf8.decode('ProgramDerivedAddress')
-  );
-  for (let i = 255; i >= 0; i--) {
-    seed[noncePos] = i;
-    const hash = sha256(seed);
-    if (isOnCurve(hash)) continue;
-    return base58.encode(hash);
-  }
-  throw new Error('SOL.programAddress: nonce exhausted, cannot find program address');
-}
-
-export const ASSOCIATED_TOKEN_PROGRAM = 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL';
-
-export const associatedToken = defineProgram(ASSOCIATED_TOKEN_PROGRAM, P.constant(0), {
-  create: {
-    coder: P.struct({}),
-    keys: {
-      source: { sign: true, write: true },
-      account: { sign: false, write: true },
-      wallet: { sign: false, write: false },
-      mint: { sign: false, write: false },
-      _sys: { address: SYS_PROGRAM, sign: false, write: false },
-      _token: { address: TOKEN_PROGRAM, sign: false, write: false },
-      _rent: { address: SYS_RENT, sign: false, write: false },
-    },
-    hint: (o: { account: string; wallet: string; mint: string; source: string }, tl: TokenList) =>
-      `Initialize associated token account=${o.account} with owner=${
-        o.wallet
-      } for token=${tokenName(o.mint, tl)}, payed by ${o.source}`,
-  },
-});
-
-export function tokenAddress(mint: string, owner: string, allowOffCurveOwner = false) {
-  if (!allowOffCurveOwner && !isOnCurve(owner)) throw new Error('Owner is off curve (cannot sign)');
-  return programAddress(
-    ASSOCIATED_TOKEN_PROGRAM,
-    ...[owner, TOKEN_PROGRAM, mint].map((i) => base58.decode(i))
-  );
+export function parseInstruction(instruction: Instruction, tl: TokenList = {}) {
+  const raw = parseInstructionRaw(instruction) as any;
+  const hint =
+    hints[instruction.program] &&
+    hints[instruction.program][raw.TAG] &&
+    hints[instruction.program][raw.TAG](raw.data, tl);
+  const res = { type: raw.TAG, info: raw.data };
+  if (hint) (res as any).hint = hint;
+  return res;
 }
 
 // https://raw.githubusercontent.com/solana-labs/token-list/main/src/tokens/solana.tokenlist.json
@@ -726,6 +453,7 @@ export const COMMON_TOKENS: TokenList = {
   So11111111111111111111111111111111111111112: { decimals: 9, symbol: 'SOL' }, // Wrapped SOL
   Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB: { decimals: 6, symbol: 'USDT', price: 1 },
   EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v: { decimals: 6, symbol: 'USDC', price: 1 },
+  '2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo': { decimals: 6, symbol: 'PYUSD', price: 1 }, // PayPal USD
 };
 
 export function tokenFromSymbol(symbol: string, tokens = COMMON_TOKENS) {
@@ -733,36 +461,16 @@ export function tokenFromSymbol(symbol: string, tokens = COMMON_TOKENS) {
   return;
 }
 
-// [1, 0, 0, 0] -> true
-// [0, 0, 0, 0] -> false
-const U32LEBOOL = P.padRight(4, P.bool, () => 0);
-export const TokenAccount = P.struct({
-  mint: pubKey,
-  owner: pubKey,
-  amount: P.U64LE,
-  delegate: P.optional(U32LEBOOL, pubKey, '11111111111111111111111111111111'),
-  state: P.map(P.U8, {
-    uninitialized: 0,
-    initialized: 1,
-    frozen: 2,
-  }),
-  isNative: P.optional(U32LEBOOL, P.U64LE, 0n),
-  delegateAmount: P.U64LE,
-  closeAuthority: P.optional(U32LEBOOL, pubKey, '11111111111111111111111111111111'),
-});
-
-export const swapProgram = 'SwaPpA9LAaLfeLi3a68M4DjnLqgtticKg6CnyNwgAC8';
-
+// Basic tx stuff
 type TxData = Bytes | string;
-
 export function verifyTx(tx: TxData) {
   if (typeof tx === 'string') tx = base64.decode(tx);
-  if (tx.length > 1280 - 40 - 8) throw new Error('sol: transaction too big');
+  if (tx.length > MAX_TX_SIZE) throw new Error('sol: transaction too big');
   const parsed = Transaction.decode(tx);
   const raw = TransactionRaw.decode(tx);
-  const msg = Message.encode(TransactionRaw.decode(tx).msg);
-  for (let i = 0; i < raw.msg.requiredSignatures; i++) {
-    const address = raw.msg.keys[i];
+  const msg = MessageRaw.encode(raw.msg);
+  for (let i = 0; i < raw.msg.data.header.requiredSignatures; i++) {
+    const address = raw.msg.data.keys[i];
     const pubKey = base58.decode(address);
     const sig = parsed.signatures[address];
     if (!ed25519.verify(sig, msg, pubKey))
@@ -804,11 +512,16 @@ export function formatPrivate(privateKey: Bytes, format: PrivateKeyFormat = 'bas
   }
 }
 
-export function createTxComplex(address: string, instructions: Instruction[], blockhash: string) {
+export function createTxComplex(
+  address: string,
+  instructions: Instruction[],
+  blockhash: string,
+  version: Version = 0
+) {
   if (!instructions.length) throw new Error('SOLPublic: empty instructions array');
   return base64.encode(
     Transaction.encode({
-      msg: { feePayer: address, blockhash, instructions },
+      msg: { version, feePayer: address, blockhash, instructions },
       signatures: {},
     })
   );
@@ -820,11 +533,11 @@ export function createTx(
   amount: string,
   _fee: bigint,
   blockhash: string
-) {
+): string {
   const amountNum = Decimal.decode(amount);
   return createTxComplex(
     from,
-    [sys.transfer({ source: from, destination: to, lamports: amountNum })],
+    [sys.transferSol({ source: from, destination: to, amount: amountNum })],
     blockhash
   );
 }
@@ -833,10 +546,10 @@ export function signTx(privateKey: Bytes, data: TxData): [string, string] {
   if (typeof data === 'string') data = base64.decode(data);
   const address = getAddress(privateKey);
   const raw = TransactionRaw.decode(data);
-  const reqSignatures = raw.msg.keys.slice(0, raw.msg.requiredSignatures);
+  const reqSignatures = raw.msg.data.keys.slice(0, raw.msg.data.header.requiredSignatures);
   if (!reqSignatures.filter((i) => i == address).length)
     throw new Error(`SOLPrivate: tx doesn't require signature for address=${address}`);
-  const sig = ed25519.sign(Message.encode(raw.msg), privateKey);
+  const sig = ed25519.sign(MessageRaw.encode(raw.msg), privateKey);
   for (let i = 0; i < reqSignatures.length; i++)
     if (reqSignatures[i] === address) raw.signatures[i] = sig;
   // Base58 encoding for tx is deprecated

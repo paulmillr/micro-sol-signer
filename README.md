@@ -5,7 +5,8 @@ Create, sign & decode Solana transactions with minimum deps.
 - 🔓 Secure: minimum deps, audited [noble](https://paulmillr.com/noble/) cryptography
 - 🔻 Tree-shakeable: unused code is excluded from your builds
 - ✍️ Create, sign and decode transactions
-- 🪶 800 lines of code
+- 🎶 Supports [Codama IDL](https://github.com/codama-idl/codama) and Token2022
+- 🪶 Minimal
 
 _Check out all web3 utility libraries:_ [ETH](https://github.com/paulmillr/micro-eth-signer), [BTC](https://github.com/paulmillr/scure-btc-signer), [SOL](https://github.com/paulmillr/micro-sol-signer), [tx-tor-broadcaster](https://github.com/paulmillr/tx-tor-broadcaster)
 

@@ -232,9 +232,11 @@ export class ArchiveNodeProvider {
     if (!info) return false;
     if (info.owner !== sol.TOKEN_PROGRAM) return false;
     try {
-      const data = sol.TokenAccount.decode(info.data);
+      const dataFull = sol.TokenAccount(info.data);
+      if (dataFull.TAG !== 'token') return false;
+      const data = dataFull.data;
       if (data.mint !== mint) return false;
-      if (data.state !== 'initialized') return false;
+      if (data.state.TAG !== 'initialized') return false;
       if (owner !== undefined && data.owner !== owner) return false;
       return true;
     } catch (e) {
@@ -265,6 +267,12 @@ export class ArchiveNodeProvider {
    */
   async fee(): Promise<bigint> {
     return BigInt((await this.recentBlockHash()).feeCalculator.lamportsPerSignature);
+  }
+  async getAddressLookupTable(address: string) {
+    const res = await this.accountInfo(address);
+    if (!res || res.owner !== 'AddressLookupTab1e1111111111111111111111111')
+      throw new Error('wrong contract');
+    return sol.AddressTableLookupData(res.data);
   }
   /**
    * Returns account balance and latest blockhash (required to create new transaction)
@@ -324,7 +332,7 @@ export class ArchiveNodeProvider {
     const rawBytes = decodeData(tx.transaction) as Uint8Array;
     sol.verifyTx(rawBytes);
     const rawTx = sol.TransactionRaw.decode(rawBytes);
-    const keys = rawTx.msg.keys;
+    const keys = rawTx.msg.data.keys;
     const transfers = [];
     for (let i = 0; i < keys.length; i++) {
       const address = keys[i];
