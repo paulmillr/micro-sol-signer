@@ -530,14 +530,13 @@ export function createTxComplex(
 export function createTx(
   from: string,
   to: string,
-  amount: string,
-  _fee: bigint,
+  amount: bigint | string,
   blockhash: string
 ): string {
-  const amountNum = Decimal.decode(amount);
+  amount = typeof amount === 'string' ? Decimal.decode(amount) : amount;
   return createTxComplex(
     from,
-    [sys.transferSol({ source: from, destination: to, amount: amountNum })],
+    [sys.transferSol({ source: from, destination: to, amount })],
     blockhash
   );
 }

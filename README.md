@@ -29,7 +29,7 @@ function getAddress(privateKey: Bytes);
 function getAddressFromPublicKey(publicKey: Bytes);
 function signTx(privateKey: Bytes, data: TxData): Promise<[string, string]>;
 function verifyTx(tx: TxData);
-function createTx(from: string, to: string, amount: string, _fee: bigint, blockhash: string);
+function createTx(from: string, to: string, amount: bigint | string, blockhash: string);
 function createTxComplex(address: string, instructions: Instruction[], blockhash: string);
 function defineProgram<T extends Record<string, MethodHint<any>>>;
 function isOnCurve(bytes: Bytes | string);
