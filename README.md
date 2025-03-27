@@ -23,10 +23,11 @@ import * as sol from 'micro-sol-signer';
 Method summary:
 
 ```ts
-function formatPrivate(privateKey: Bytes, format: 'base58' | 'hex' | 'array' = 'base');
+function formatPrivate(privateKey: Bytes, format: 'base58' | 'hex' | 'array' = 'base58');
 function getPublicKey(privateKey: Bytes);
 function getAddress(privateKey: Bytes);
 function getAddressFromPublicKey(publicKey: Bytes);
+function getPublicKeyFromAddress(address: string)
 function signTx(privateKey: Bytes, data: TxData): Promise<[string, string]>;
 function verifyTx(tx: TxData);
 function createTx(from: string, to: string, amount: bigint | string, blockhash: string);
