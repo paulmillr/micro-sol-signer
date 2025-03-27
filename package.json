@@ -19,6 +19,11 @@
       "types": "./lib/net.d.ts",
       "import": "./lib/esm/net.js",
       "default": "./lib/net.js"
+    },
+    "./idl.js": {
+      "types": "./lib/idl/index.d.ts",
+      "import": "./lib/esm/idl/index.js",
+      "default": "./lib/idl/index.js"
     }
   },
   "dependencies": {
