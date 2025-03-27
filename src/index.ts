@@ -491,6 +491,10 @@ export function getAddressFromPublicKey(publicKey: Bytes) {
   return base58.encode(publicKey);
 }
 
+export function getPublicKeyFromAddress(address: string) {
+  return base58.decode(address);
+}
+
 type PrivateKeyFormat = 'base58' | 'hex' | 'array';
 
 export function formatPrivate(privateKey: Bytes, format: PrivateKeyFormat = 'base58') {
