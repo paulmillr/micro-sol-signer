@@ -3,6 +3,7 @@ import { describe, should } from 'micro-should';
 import { URL, ArchiveNodeProvider, calcTransfersDiff } from '../lib/esm/net.js';
 import * as mftch from 'micro-ftch';
 import * as sol from '../lib/esm/index.js';
+import { COMMON_TOKENS } from '../lib/esm/hint.js';
 import { default as NET_TRANSFERS } from './vectors/net_transfers.mjs';
 import { default as NET_BASIC } from './vectors/net_basic.mjs';
 import { default as NET_TOKEN_VALID } from './vectors/net_token_valid.mjs';
@@ -48,7 +49,7 @@ describe('Net', () => {
       blockhash: '2S4rrrQjjp1KApWNn5wrekmut1EQXGkDApWarjtiGZxf',
       active: true,
     });
-    deepStrictEqual(await archive.tokenBalances(addr, sol.COMMON_TOKENS), [
+    deepStrictEqual(await archive.tokenBalances(addr, COMMON_TOKENS), [
       {
         contract: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
         symbol: 'USDC',

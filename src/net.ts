@@ -1,5 +1,6 @@
 import { base58, base64 } from '@scure/base';
 import * as sol from './index.js';
+import type { TokenInfo } from './hint.js';
 
 // These seem official, but trigger rate-limit easily.
 // Paid one starts from $500, self-hosted will require 100+ TBs of storage.
@@ -111,7 +112,7 @@ type RawTxInfo = {
   transaction: Data;
 };
 
-export type TokenBalance = Partial<sol.TokenInfo> & {
+export type TokenBalance = Partial<TokenInfo> & {
   contract: string; // This is actual 'mint', but for compat with eth-signer lets call it contract (same thing)
   decimals: number;
   balance: bigint;
@@ -295,12 +296,12 @@ export class ArchiveNodeProvider {
   /**
    * Returns information about token accounts for address
    * @param address - Solana address
-   * @param tokensInfo - Tokens information (sol.COMMON_TOKENS), Record<mintAddress, sol.TokenInfo>
+   * @param tokensInfo - Tokens information (sol.COMMON_TOKENS), Record<mintAddress, TokenInfo>
    * @returns
    */
   async tokenBalances(
     address: string,
-    tokensInfo: Record<string, sol.TokenInfo>
+    tokensInfo: Record<string, TokenInfo>
   ): Promise<TokenBalance[]> {
     if (typeof address !== 'string') throw new Error(`tokenBalance: wrong address=${address}`);
     const tokens: TokenAccountsOwner[] = await this.jsonCall('getTokenAccountsByOwner', address, {
