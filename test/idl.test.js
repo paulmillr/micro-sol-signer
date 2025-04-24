@@ -3,6 +3,7 @@ import { describe, should } from 'micro-should';
 import { hex, base64 } from '@scure/base';
 import * as sol from '../lib/esm/index.js';
 import * as idl from '../lib/esm/idl/index.js';
+import { hintInstruction } from '../lib/esm/hint.js';
 
 describe('Solana', () => {
   describe('mapType', () => {
@@ -680,18 +681,7 @@ describe('Solana', () => {
             newAccount: 'BvMRjBKGsr8NiAkRKC3h7tu1xvJQ2LK9hpQP783sNdQf',
           },
         },
-        // Old format compatibility
-        expHint: {
-          type: 'createAccount',
-          info: {
-            payer: '73c3aLQxue8M6Kj9Y3gxhkxzFeyB8vxYJLTw7Z8RxstQ',
-            newAccount: 'BvMRjBKGsr8NiAkRKC3h7tu1xvJQ2LK9hpQP783sNdQf',
-            lamports: 123n,
-            space: 0n,
-            programAddress: '11111111111111111111111111111111',
-          },
-          hint: 'Create new account=BvMRjBKGsr8NiAkRKC3h7tu1xvJQ2LK9hpQP783sNdQf with balance of 0.000000123 and owner program 11111111111111111111111111111111, using funding account 73c3aLQxue8M6Kj9Y3gxhkxzFeyB8vxYJLTw7Z8RxstQ',
-        },
+        expHint: 'Create new account=BvMRjBKGsr8NiAkRKC3h7tu1xvJQ2LK9hpQP783sNdQf with balance of 0.000000123 and owner program 11111111111111111111111111111111, using funding account 73c3aLQxue8M6Kj9Y3gxhkxzFeyB8vxYJLTw7Z8RxstQ',
       },
       // sys/transfer (123)
       {
@@ -711,15 +701,7 @@ describe('Solana', () => {
             destination: '3gqrRcuQ8xprBhymXS1FctNxi8hbw3bz5EgKBUgSWiQH',
           },
         },
-        expHint: {
-          type: 'transferSol',
-          info: {
-            source: '9zM2WpVSyTKBmjpMiG7JTkmyRBdPVcKqCLQPnhMLqTxr',
-            destination: '3gqrRcuQ8xprBhymXS1FctNxi8hbw3bz5EgKBUgSWiQH',
-            amount: 123n,
-          },
-          hint: 'Transfer 0.000000123 SOL from 9zM2WpVSyTKBmjpMiG7JTkmyRBdPVcKqCLQPnhMLqTxr to 3gqrRcuQ8xprBhymXS1FctNxi8hbw3bz5EgKBUgSWiQH',
-        },
+        expHint: 'Transfer 0.000000123 SOL from 9zM2WpVSyTKBmjpMiG7JTkmyRBdPVcKqCLQPnhMLqTxr to 3gqrRcuQ8xprBhymXS1FctNxi8hbw3bz5EgKBUgSWiQH',
       },
       // sys/transfer (2**53)
       {
@@ -794,9 +776,9 @@ describe('Solana', () => {
         }),
       },
     ];
-    for (const { data, exp, expHint, expEnc } of VECTORS) {
-      deepStrictEqual(sol.parseInstructionRaw(data), exp);
-      if (expHint) deepStrictEqual(sol.parseInstruction(data), expHint);
+    for (const { data, exp, expEnc, expHint } of VECTORS) {
+      deepStrictEqual(sol.parseInstruction(data), exp);
+      if (expHint) deepStrictEqual(hintInstruction(data), expHint);
       if (expEnc) deepStrictEqual(expEnc, data);
       const c = sol.CONTRACTS[data.program];
       deepStrictEqual(c.instructions.encoders[exp.TAG](exp.data), data);
@@ -809,62 +791,69 @@ describe('Solana', () => {
         tx: 'Apk3fKzUwguQ0Q1IF2aCqaj87cEVSAHoHw7O0Y/H6qdp1FvaTkwGAUbadNnEfcLXdt55D5v8YzYX3EW+sBhQpgQVBLR8Wk2o591q3bkFy9TMjobyc1ZndzV/MoEnUczL+ra9cuMfb+zALUi90TtQv8O/PmGBc4TL8VFd+5oom8EEAgADBSxbkLJCDImo/Dsv1hWonR5UT1lJ6J41j6uIZJ9b25x0eSuJgsH0qjdvDOP8rD6nkRNz/3I96dbeTNbsV+hHfI8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAan1RcZLFxRIYzJTD1K8X9Y2u4Im6H9ROPb2YoAAAAABt324ddloZPZy+FGzut5rBy0he1fWzeROoz1hX7/AKlzIFJT+O+2lkFhvvElYU83/0QmttbPZJbXWM72DoIYxwICAgABNAAAAABgTRYAAAAAAFIAAAAAAAAABt324ddloZPZy+FGzut5rBy0he1fWzeROoz1hX7/AKkEAgEDIwAJLFuQskIMiaj8Oy/WFaidHlRPWUnonjWPq4hkn1vbnHQA',
         exp: [
           {
-            type: 'createAccount',
-            info: {
+            TAG: 'createAccount',
+            data: {
               lamports: 1461600n,
               space: 82n,
               programAddress: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
               payer: '3z9vL1zjN6qyAFHhHQdWYRTFAcy69pJydkZmSFBKHg1R',
               newAccount: '99zqUzQGohamfYxyo8ykTEbi91iom3CLmwCA75FK5zTg',
             },
-            hint: 'Create new account=99zqUzQGohamfYxyo8ykTEbi91iom3CLmwCA75FK5zTg with balance of 0.0014616 and owner program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA, using funding account 3z9vL1zjN6qyAFHhHQdWYRTFAcy69pJydkZmSFBKHg1R',
           },
           {
-            type: 'initializeMint',
-            info: {
+            TAG: 'initializeMint',
+            data: {
               decimals: 9n,
               mintAuthority: '3z9vL1zjN6qyAFHhHQdWYRTFAcy69pJydkZmSFBKHg1R',
               mint: '99zqUzQGohamfYxyo8ykTEbi91iom3CLmwCA75FK5zTg',
             },
           },
         ],
+        expHints: [
+          'Create new account=99zqUzQGohamfYxyo8ykTEbi91iom3CLmwCA75FK5zTg with balance of 0.0014616 and owner program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA, using funding account 3z9vL1zjN6qyAFHhHQdWYRTFAcy69pJydkZmSFBKHg1R',
+          undefined,
+        ],
       },
       {
         tx: 'ATtpZiSRCLfziaeUatK0ADHOhKauppOswOMMohRHWafXx4LEY+LOOtzedd/FFb4jQynft8ToQxKtU79eJrRhdwYBAAQGLFuQskIMiaj8Oy/WFaidHlRPWUnonjWPq4hkn1vbnHSPgLHjoEEfVvBZHY8z4qSSYL0cwD2JEARR3T8B3mFwsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABt324ddloZPZy+FGzut5rBy0he1fWzeROoz1hX7/AKl5K4mCwfSqN28M4/ysPqeRE3P/cj3p1t5M1uxX6Ed8j4yXJY9OJInxuz0QKRSODYMLWhOZ2v8QhASOe9jb6fhZrikQEvF5Zp9/zjXMgRq4U4Lbe+aBJAyL8HxEaaa6UsMBBQYAAQAEAgMBAA==',
         exp: [
           {
-            type: 'createAssociatedToken',
-            info: {
+            TAG: 'createAssociatedToken',
+            data: {
               payer: '3z9vL1zjN6qyAFHhHQdWYRTFAcy69pJydkZmSFBKHg1R',
               ata: 'AfB7uwBEsGtrrBqPTVqEgzWed5XdYfM1psPNLmf7EeX9',
               owner: '3z9vL1zjN6qyAFHhHQdWYRTFAcy69pJydkZmSFBKHg1R',
               mint: '99zqUzQGohamfYxyo8ykTEbi91iom3CLmwCA75FK5zTg',
             },
-            hint: 'Initialize associated token account=AfB7uwBEsGtrrBqPTVqEgzWed5XdYfM1psPNLmf7EeX9 with owner=3z9vL1zjN6qyAFHhHQdWYRTFAcy69pJydkZmSFBKHg1R for token=99zqUzQGohamfYxyo8ykTEbi91iom3CLmwCA75FK5zTg, payed by 3z9vL1zjN6qyAFHhHQdWYRTFAcy69pJydkZmSFBKHg1R',
           },
+        ],
+        expHints: [
+          'Initialize associated token account=AfB7uwBEsGtrrBqPTVqEgzWed5XdYfM1psPNLmf7EeX9 with owner=3z9vL1zjN6qyAFHhHQdWYRTFAcy69pJydkZmSFBKHg1R for token=99zqUzQGohamfYxyo8ykTEbi91iom3CLmwCA75FK5zTg, payed by 3z9vL1zjN6qyAFHhHQdWYRTFAcy69pJydkZmSFBKHg1R',
         ],
       },
       {
         tx: 'AZlwQM9W2Op/CCyn/lYAXcSwrytT5+iGK+/LuWZJ/RfFquiVyuLGjFzIyu1QebBKPAxedEGSZsDSfmr8jR4kyQ0BAAUHLFuQskIMiaj8Oy/WFaidHlRPWUnonjWPq4hkn1vbnHT5QLRxpBvSzC/hNa0VaaR9P9eKEuXi2YcQGLQsEsFJ8wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABt324ddloZPZy+FGzut5rBy0he1fWzeROoz1hX7/AKkZXyFmpmcpze2ukmaRcxpDxtR7XfJoUU6wqxU2MJ9DOnkriYLB9Ko3bwzj/Kw+p5ETc/9yPenW3kzW7FfoR3yPjJclj04kifG7PRApFI4NgwtaE5na/xCEBI572Nvp+Fmor83yzqDb/bgHX6OQsThdSMC5WwmW+dTOf1tskfnz7QEGBgABBAUCAwEA',
         exp: [
           {
-            type: 'createAssociatedToken',
-            info: {
+            TAG: 'createAssociatedToken',
+            data: {
               payer: '3z9vL1zjN6qyAFHhHQdWYRTFAcy69pJydkZmSFBKHg1R',
               ata: 'Hmyk3FSw4cfsuAes7sanp2oxSkE9ivaH6pMzDzbacqmt',
               owner: '2i3KvjDCZWxBsqcxBHpdEaZYQwQSYE6LXUMx5VjY5XrR',
               mint: '99zqUzQGohamfYxyo8ykTEbi91iom3CLmwCA75FK5zTg',
             },
-            hint: 'Initialize associated token account=Hmyk3FSw4cfsuAes7sanp2oxSkE9ivaH6pMzDzbacqmt with owner=2i3KvjDCZWxBsqcxBHpdEaZYQwQSYE6LXUMx5VjY5XrR for token=99zqUzQGohamfYxyo8ykTEbi91iom3CLmwCA75FK5zTg, payed by 3z9vL1zjN6qyAFHhHQdWYRTFAcy69pJydkZmSFBKHg1R',
           },
+        ],
+        expHints: [
+          'Initialize associated token account=Hmyk3FSw4cfsuAes7sanp2oxSkE9ivaH6pMzDzbacqmt with owner=2i3KvjDCZWxBsqcxBHpdEaZYQwQSYE6LXUMx5VjY5XrR for token=99zqUzQGohamfYxyo8ykTEbi91iom3CLmwCA75FK5zTg, payed by 3z9vL1zjN6qyAFHhHQdWYRTFAcy69pJydkZmSFBKHg1R',
         ],
       },
       {
         tx: 'AURhKq6gvwj0TrZ4SLAnar1z+1WNvk8l/oLaLHU+sydfyTv8kZV8V9xEVblE9QeoEfBSFZgvrlA4AV2DTQT61gMBAAEELFuQskIMiaj8Oy/WFaidHlRPWUnonjWPq4hkn1vbnHR5K4mCwfSqN28M4/ysPqeRE3P/cj3p1t5M1uxX6Ed8j4+AseOgQR9W8FkdjzPipJJgvRzAPYkQBFHdPwHeYXCwBt324ddloZPZy+FGzut5rBy0he1fWzeROoz1hX7/AKl/NElmROqjk0gZlDcSBoLMV4SDbJBRenJx+PseWNmzvwEDAwECAAoOAOh2SBcAAAAJ',
         exp: [
           {
-            type: 'mintToChecked',
-            info: {
+            TAG: 'mintToChecked',
+            data: {
               amount: 100000000000n,
               decimals: 9n,
               mint: '99zqUzQGohamfYxyo8ykTEbi91iom3CLmwCA75FK5zTg',
@@ -878,8 +867,8 @@ describe('Solana', () => {
         tx: 'AXny3f5b65+QIxtn7f9eUS3nbEUJmindmT787RH2e/h7zSxIcOtvuN0BFfv8p1eOdXeK+TR/JdGava0Z0UfQ9wYBAAEELFuQskIMiaj8Oy/WFaidHlRPWUnonjWPq4hkn1vbnHR5K4mCwfSqN28M4/ysPqeRE3P/cj3p1t5M1uxX6Ed8j/lAtHGkG9LML+E1rRVppH0/14oS5eLZhxAYtCwSwUnzBt324ddloZPZy+FGzut5rBy0he1fWzeROoz1hX7/AKkWUcQ9kKtprzGWWb1V00jORI0DDZxTqbadRe18VHqX1gEDAwECAAoOAOh2SBcAAAAJ',
         exp: [
           {
-            type: 'mintToChecked',
-            info: {
+            TAG: 'mintToChecked',
+            data: {
               amount: 100000000000n,
               decimals: 9n,
               mint: '99zqUzQGohamfYxyo8ykTEbi91iom3CLmwCA75FK5zTg',
@@ -893,8 +882,8 @@ describe('Solana', () => {
         tx: 'AfhwV78LfaDKAGIuVlBTvD3LRtdeN0mp1VCw/HEZmLhLKQOEY/h6YjPxucRv4NwUKzaPf87WOG2D8UC2yx37dw4BAAIFLFuQskIMiaj8Oy/WFaidHlRPWUnonjWPq4hkn1vbnHSPgLHjoEEfVvBZHY8z4qSSYL0cwD2JEARR3T8B3mFwsPlAtHGkG9LML+E1rRVppH0/14oS5eLZhxAYtCwSwUnzBt324ddloZPZy+FGzut5rBy0he1fWzeROoz1hX7/AKl5K4mCwfSqN28M4/ysPqeRE3P/cj3p1t5M1uxX6Ed8jyF1YBckSSuREgKc5e+TvTJ4JilllzywAEztm4Rg9WYNAQMEAQQCAAoMAOh2SBcAAAAJ',
         exp: [
           {
-            type: 'transferChecked',
-            info: {
+            TAG: 'transferChecked',
+            data: {
               amount: 100000000000n,
               decimals: 9n,
               source: 'AfB7uwBEsGtrrBqPTVqEgzWed5XdYfM1psPNLmf7EeX9',
@@ -909,33 +898,38 @@ describe('Solana', () => {
         tx: 'AuvHXXD/LegvEHdWy+sey2sq6bgpuKPQ1KZRMJjf4VSdxizW5WOi/AYiAZ3XxqAhCQ0uBgjjGhCALL59gJ3HeQvMZTvsU0n8/v9V1xdUsNsxyii8j/0fb9jQ6nzwI1l6C+Yhkz2wP7BMbGKKGYCeeXADN+T2DO2ncrL1zjaZ9skGAgAEBjfEXexaW5u9jE/XRbYGcFTHFKfJ3qwdRq9/Munbw1pgnfwiRaMblhE/thMQ6fsnk9fxTUFZkcewsJxRBSmNMrQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMGRm/lIRcy/+ytunLDm+e8jOW7xfcSayxDmzpAAAAABqfVFxksXFEhjMlMPUrxf1ja7gibof1E49vZigAAAAAG3fbh7nWP3hhCXbzkbM3athr8TYO5DSf+vfko2KGL/Mlk1sZUDjt4mNIvY36HxmJxJseOKEZcKYnX2eCwUzl2BAICAAE0AAAAAOBxJgAAAAAA6gAAAAAAAAAG3fbh7nWP3hhCXbzkbM3athr8TYO5DSf+vfko2KGL/AUBAUInADfEXexaW5u9jE/XRbYGcFTHFKfJ3qwdRq9/Munbw1pgnfwiRaMblhE/thMQ6fsnk9fxTUFZkcewsJxRBSmNMrQFAgEEIwAJN8Rd7Fpbm72MT9dFtgZwVMcUp8nerB1Gr38y6dvDWmAAAwAFAlUaAAA=',
         exp: [
           {
-            type: 'createAccount',
-            info: {
+            TAG: 'createAccount',
+            data: {
               lamports: 2519520n,
               space: 234n,
               programAddress: 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb',
               payer: '4kh6HxYZiAebF8HWLsUWod2EaQQ6iWHpHYCz8UcmFbM1',
               newAccount: 'BdhzpzhTD1MFqBiwNdrRy4jFo2FHFufw3n9e8sVjJczP',
             },
-            hint: 'Create new account=BdhzpzhTD1MFqBiwNdrRy4jFo2FHFufw3n9e8sVjJczP with balance of 0.00251952 and owner program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb, using funding account 4kh6HxYZiAebF8HWLsUWod2EaQQ6iWHpHYCz8UcmFbM1',
           },
           {
-            type: 'initializeMetadataPointer',
-            info: {
+            TAG: 'initializeMetadataPointer',
+            data: {
               authority: '4kh6HxYZiAebF8HWLsUWod2EaQQ6iWHpHYCz8UcmFbM1',
               metadataAddress: 'BdhzpzhTD1MFqBiwNdrRy4jFo2FHFufw3n9e8sVjJczP',
               mint: 'BdhzpzhTD1MFqBiwNdrRy4jFo2FHFufw3n9e8sVjJczP',
             },
           },
           {
-            type: 'initializeMint',
-            info: {
+            TAG: 'initializeMint',
+            data: {
               decimals: 9n,
               mintAuthority: '4kh6HxYZiAebF8HWLsUWod2EaQQ6iWHpHYCz8UcmFbM1',
               mint: 'BdhzpzhTD1MFqBiwNdrRy4jFo2FHFufw3n9e8sVjJczP',
             },
           },
-          { type: 'setComputeUnitLimit', info: { units: 6741n } },
+          { TAG: 'setComputeUnitLimit', data: { units: 6741n } },
+        ],
+        expHints: [
+          'Create new account=BdhzpzhTD1MFqBiwNdrRy4jFo2FHFufw3n9e8sVjJczP with balance of 0.00251952 and owner program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb, using funding account 4kh6HxYZiAebF8HWLsUWod2EaQQ6iWHpHYCz8UcmFbM1',
+          undefined,
+          undefined,
+          undefined,
         ],
       },
       // Various interactions from owner of PayPal USD
@@ -943,33 +937,35 @@ describe('Solana', () => {
         tx: 'AVvIWSf3GAI4dYhQpXgeDxxIPAQXjSdFbM0PnR4k+YVxxjyCAYMHI9B1cNF1twKMNsdaR1dXMDx6wkuCMsOxbwABAAYIjvc5WL3sWd8tmpOTRWY3eJU2wKttQVR1975ZJYyFAkxFXOQhzEYjH8VwYGyssyS+LLX24/cruHyO87eVOy1/AgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwZGb+UhFzL/7K26csOb57yM5bvF9xJrLEObOkAAAAAG3fbh7nWP3hhCXbzkbM3athr8TYO5DSf+vfko2KGL/BeFMmHvarhTKmfwU4ZarTEpP88HzxIKtbmhVwZUjcArHC7mfxJN9u3yqdK/XjpTPHcBtY+NqpVyEKHlsGGM0r6MlyWPTiSJ8bs9ECkUjg2DC1oTmdr/EIQEjnvY2+n4WdGUX7GQqmqBDDSnGFanqm98qp0c4v4HDujVb2JKwSiAAgcGAAEFBgIEAQADAAUCqksAAA==',
         exp: [
           {
-            type: 'createAssociatedToken',
-            info: {
+            TAG: 'createAssociatedToken',
+            data: {
               payer: 'Ad5YH3AoPHXeHxxWt5uFTZHw9HFGKV9wDfQCV19wN4dH',
               ata: '5fmHWCRD1QvHqB4ZQP7PRWcoPR8nSNJyNaPF5iAzz13w',
               owner: '2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk',
               mint: '2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH',
               tokenProgram: 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb',
             },
-            hint: 'Initialize associated token account=5fmHWCRD1QvHqB4ZQP7PRWcoPR8nSNJyNaPF5iAzz13w with owner=2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk for token=2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH, payed by Ad5YH3AoPHXeHxxWt5uFTZHw9HFGKV9wDfQCV19wN4dH',
           },
-          { type: 'setComputeUnitLimit', info: { units: 19370n } },
+          { TAG: 'setComputeUnitLimit', data: { units: 19370n } },
+        ],
+        expHints: [
+          'Initialize associated token account=5fmHWCRD1QvHqB4ZQP7PRWcoPR8nSNJyNaPF5iAzz13w with owner=2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk for token=2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH, payed by Ad5YH3AoPHXeHxxWt5uFTZHw9HFGKV9wDfQCV19wN4dH',
+          undefined,
         ],
       },
       {
         tx: 'AVRXqhkYDcrv8k1FSYMLY4Y/BZx6lAwSBmcb5AIz1ujeEN1nNrbiLBkEmH1JTS7jDQiKePbKFfgPJkH54nuolAUBAAMHF4UyYe9quFMqZ/BThlqtMSk/zwfPEgq1uaFXBlSNwCsXkkg7bIoqh7dHHYFPlZH5OVyECpzj2fTVun06S4p0nsFD3yzy+h+TmgQ+OBdM2MSuOr0P0krLPZaTvpIdz+IMxNdPEryA6Wm6OLWXZdej6gLk8axqPexj0zzelZEVJu8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAan1RcZLFaO4IqEX3PSl4jPA1wxRbIas0TYBi6pQAAABt324e51j94YQl285GzN2rYa/E2DuQ0n/r35KNihi/w+HvV69JOXuXODgQXMc2t0EH4qpwyiz3TYOjyMhCQPpwIEAwIFAAQEAAAABgMDAQAKD0BCDwAAAAAABg==',
         exp: [
           {
-            type: 'advanceNonceAccount',
-            info: {
+            TAG: 'advanceNonceAccount',
+            data: {
               nonceAccount: 'E1RiHYRyLpGL3cyFcG83vX5rGRM69XB32RSgQTfvBRmM',
               nonceAuthority: '2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk',
             },
-            hint: 'Consume nonce in nonce account=E1RiHYRyLpGL3cyFcG83vX5rGRM69XB32RSgQTfvBRmM (owner: 2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk)',
           },
           {
-            type: 'burnChecked',
-            info: {
+            TAG: 'burnChecked',
+            data: {
               amount: 1000000n,
               decimals: 6n,
               account: 'EFPL5qtehMfDump11iGjgqjyfdFnY7qGk6gg4DdzxC6S',
@@ -978,104 +974,122 @@ describe('Solana', () => {
             },
           },
         ],
+        expHints: [
+          'Consume nonce in nonce account=E1RiHYRyLpGL3cyFcG83vX5rGRM69XB32RSgQTfvBRmM (owner: 2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk)',
+          undefined,
+        ],
       },
       {
         tx: 'AXA0HTBrGH7iXGBGk3caE4qZeWJMqdKuwrKhkCG3Xm/EGCccLcUQ7y8x16OGSVXQhe65JY8pbXcE8izPV4KYrAwBAAQHF4UyYe9quFMqZ/BThlqtMSk/zwfPEgq1uaFXBlSNwCuFcfC3PxPWcmdgVHknqcqkWIssXfezo9NWjnaMB0+//sTXTxK8gOlpuji1l2XXo+oC5PGsaj3sY9M83pWRFSbvAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGp9UXGSxWjuCKhF9z0peIzwNcMUWyGrNE2AYuqUAAAAbd9uHudY/eGEJdvORszdq2GvxNg7kNJ/69+SjYoYv8F5JIO2yKKoe3Rx2BT5WR+TlchAqc49n01bp9OkuKdJ4SMT8pGkjyUZYaWBO0Kh+e99ZhbbJiOisZqN4bQ2yO8gIDAwEEAAQEAAAABQMCBgABCw==',
         exp: [
           {
-            type: 'advanceNonceAccount',
-            info: {
+            TAG: 'advanceNonceAccount',
+            data: {
               nonceAccount: '9yuzc3tvAAcnsWxmVModBqPNxrU1mRK8LJ5VvjB1mLvq',
               nonceAuthority: '2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk',
             },
-            hint: 'Consume nonce in nonce account=9yuzc3tvAAcnsWxmVModBqPNxrU1mRK8LJ5VvjB1mLvq (owner: 2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk)',
           },
           {
-            type: 'thawAccount',
-            info: {
+            TAG: 'thawAccount',
+            data: {
               account: 'EFPL5qtehMfDump11iGjgqjyfdFnY7qGk6gg4DdzxC6S',
               mint: '2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo',
               owner: '2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk',
             },
           },
+        ],
+        expHints: [
+          'Consume nonce in nonce account=9yuzc3tvAAcnsWxmVModBqPNxrU1mRK8LJ5VvjB1mLvq (owner: 2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk)',
+          undefined,
         ],
       },
       {
         tx: 'AS/A80W/ZwdtsZMRW93ixqSVrQZcCpiWOFA1K3WjC7phZnPxHfUOB4wk18apvGCcOXP3tueKzyjVEuwe4KDC/gQBAAQHF4UyYe9quFMqZ/BThlqtMSk/zwfPEgq1uaFXBlSNwCtHv3jqWulNN8/27BwP2WEL6vlcIlDUnoEJ7DXbJHvOT8TXTxK8gOlpuji1l2XXo+oC5PGsaj3sY9M83pWRFSbvAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGp9UXGSxWjuCKhF9z0peIzwNcMUWyGrNE2AYuqUAAAAbd9uHudY/eGEJdvORszdq2GvxNg7kNJ/69+SjYoYv8F5JIO2yKKoe3Rx2BT5WR+TlchAqc49n01bp9OkuKdJ5bqr4t4Z7rj4TOhyllbNWPkOR3J0XIJSDfnmvITrXfDgIDAwEEAAQEAAAABQMCBgABCg==',
         exp: [
           {
-            type: 'advanceNonceAccount',
-            info: {
+            TAG: 'advanceNonceAccount',
+            data: {
               nonceAccount: '5q5HZtAZUNr6BAv92icSaV3C46a7Hn4W1TaR9wZ27Fg2',
               nonceAuthority: '2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk',
             },
-            hint: 'Consume nonce in nonce account=5q5HZtAZUNr6BAv92icSaV3C46a7Hn4W1TaR9wZ27Fg2 (owner: 2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk)',
           },
           {
-            type: 'freezeAccount',
-            info: {
+            TAG: 'freezeAccount',
+            data: {
               account: 'EFPL5qtehMfDump11iGjgqjyfdFnY7qGk6gg4DdzxC6S',
               mint: '2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo',
               owner: '2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk',
             },
           },
         ],
+        expHints: [
+          'Consume nonce in nonce account=5q5HZtAZUNr6BAv92icSaV3C46a7Hn4W1TaR9wZ27Fg2 (owner: 2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk)',
+          undefined,
+        ],
       },
       {
         tx: 'AVvIWSf3GAI4dYhQpXgeDxxIPAQXjSdFbM0PnR4k+YVxxjyCAYMHI9B1cNF1twKMNsdaR1dXMDx6wkuCMsOxbwABAAYIjvc5WL3sWd8tmpOTRWY3eJU2wKttQVR1975ZJYyFAkxFXOQhzEYjH8VwYGyssyS+LLX24/cruHyO87eVOy1/AgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwZGb+UhFzL/7K26csOb57yM5bvF9xJrLEObOkAAAAAG3fbh7nWP3hhCXbzkbM3athr8TYO5DSf+vfko2KGL/BeFMmHvarhTKmfwU4ZarTEpP88HzxIKtbmhVwZUjcArHC7mfxJN9u3yqdK/XjpTPHcBtY+NqpVyEKHlsGGM0r6MlyWPTiSJ8bs9ECkUjg2DC1oTmdr/EIQEjnvY2+n4WdGUX7GQqmqBDDSnGFanqm98qp0c4v4HDujVb2JKwSiAAgcGAAEFBgIEAQADAAUCqksAAA==',
         exp: [
           {
-            type: 'createAssociatedToken',
-            info: {
+            TAG: 'createAssociatedToken',
+            data: {
               payer: 'Ad5YH3AoPHXeHxxWt5uFTZHw9HFGKV9wDfQCV19wN4dH',
               ata: '5fmHWCRD1QvHqB4ZQP7PRWcoPR8nSNJyNaPF5iAzz13w',
               owner: '2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk',
               mint: '2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH',
               tokenProgram: 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb',
             },
-            hint: 'Initialize associated token account=5fmHWCRD1QvHqB4ZQP7PRWcoPR8nSNJyNaPF5iAzz13w with owner=2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk for token=2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH, payed by Ad5YH3AoPHXeHxxWt5uFTZHw9HFGKV9wDfQCV19wN4dH',
           },
-          { type: 'setComputeUnitLimit', info: { units: 19370n } },
+          { TAG: 'setComputeUnitLimit', data: { units: 19370n } },
+        ],
+        expHints: [
+          'Initialize associated token account=5fmHWCRD1QvHqB4ZQP7PRWcoPR8nSNJyNaPF5iAzz13w with owner=2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk for token=2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH, payed by Ad5YH3AoPHXeHxxWt5uFTZHw9HFGKV9wDfQCV19wN4dH',
+          undefined,
         ],
       },
       {
         tx: 'Adu2InIIDagwBZPrIJNsd17VE8f8dhkj1I5dpZ6bRuo8imSD6v9LvGr+BLuWPaE45OMU8cFoJffLpuKCGhJQGg0BAAUHLyeAYsM6cMrp7/Sk6auRPE2zgWWVKawFBShkiN8lD9z4rPOqJRLIREELMPsSIg6HeSXfsS1zD6ym4nPRHuaffQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABt324e51j94YQl285GzN2rYa/E2DuQ0n/r35KNihi/wXhTJh72q4Uypn8FOGWq0xKT/PB88SCrW5oVcGVI3AKxeSSDtsiiqHt0cdgU+Vkfk5XIQKnOPZ9NW6fTpLinSejJclj04kifG7PRApFI4NgwtaE5na/xCEBI572Nvp+FmVVnmPT9ptUjC0+Hm2up9MZMQDKNKee9SkarXxflK7xwEGBgABBAUCAwEA',
         exp: [
           {
-            type: 'createAssociatedToken',
-            info: {
+            TAG: 'createAssociatedToken',
+            data: {
               payer: '4B56djoYCRdBSqnyEycUfSLQt7Xbq5uA74wt8K1boMMu',
               ata: 'Hjj4yTUikj19ebuYPpMTr2AKsuiMc57w7shSbbL9w86G',
               owner: '2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk',
               mint: '2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo',
               tokenProgram: 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb',
             },
-            hint: 'Initialize associated token account=Hjj4yTUikj19ebuYPpMTr2AKsuiMc57w7shSbbL9w86G with owner=2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk for token=2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo, payed by 4B56djoYCRdBSqnyEycUfSLQt7Xbq5uA74wt8K1boMMu',
           },
+        ],
+        expHints: [
+          'Initialize associated token account=Hjj4yTUikj19ebuYPpMTr2AKsuiMc57w7shSbbL9w86G with owner=2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk for token=2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo, payed by 4B56djoYCRdBSqnyEycUfSLQt7Xbq5uA74wt8K1boMMu',
         ],
       },
       {
         tx: 'AUQP6XwffCGFpjJ+0HfFN2s44HOz5vlT+vWSL2IEYthWMURjVua5mspoUC2B6ghZ6+xymcFvjzorMDaKozL+gAcBAAUHLyeAYsM6cMrp7/Sk6auRPE2zgWWVKawFBShkiN8lD9z8BZQ0KU9w1RNszuH5XXZEwQ7S1thN+qStuDUzJcnoHwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABt324e51j94YQl285GzN2rYa/E2DuQ0n/r35KNihi/wXhTJh72q4Uypn8FOGWq0xKT/PB88SCrW5oVcGVI3AK4yXJY9OJInxuz0QKRSODYMLWhOZ2v8QhASOe9jb6fhZ9Q6ekr4sJUfqVG8afcxuVXSrfCvM78pGNjtoEIVC9+bc9AhpqldybxUr0bcjwhiNmKXzpq2tIKhGcLfTQ77unwEFBgABBAYCAwEA',
         exp: [
           {
-            type: 'createAssociatedToken',
-            info: {
+            TAG: 'createAssociatedToken',
+            data: {
               payer: '4B56djoYCRdBSqnyEycUfSLQt7Xbq5uA74wt8K1boMMu',
               ata: 'Hxng5sX7D1a2LyZonHabdXhrTySXbrLK4q2taKuhGtCW',
               owner: '2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk',
               mint: 'HVbpJAQGNpkgBaYBZQBR1t7yFdvaYVp2vCQQfKKEN4tM',
               tokenProgram: 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb',
             },
-            hint: 'Initialize associated token account=Hxng5sX7D1a2LyZonHabdXhrTySXbrLK4q2taKuhGtCW with owner=2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk for token=HVbpJAQGNpkgBaYBZQBR1t7yFdvaYVp2vCQQfKKEN4tM, payed by 4B56djoYCRdBSqnyEycUfSLQt7Xbq5uA74wt8K1boMMu',
           },
+        ],
+        expHints: [
+          'Initialize associated token account=Hxng5sX7D1a2LyZonHabdXhrTySXbrLK4q2taKuhGtCW with owner=2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk for token=HVbpJAQGNpkgBaYBZQBR1t7yFdvaYVp2vCQQfKKEN4tM, payed by 4B56djoYCRdBSqnyEycUfSLQt7Xbq5uA74wt8K1boMMu',
         ],
       },
     ];
     const count = { ok: 0, failed: 0 };
-    for (const { tx, exp } of VECTORS) {
+    for (const { tx, exp, expHints } of VECTORS) {
       const parsed = sol.Transaction.decode(base64.decode(tx));
       const instr = parsed.msg.instructions.map(sol.parseInstruction);
       deepStrictEqual(instr, exp);
+      if (expHints) deepStrictEqual(parsed.msg.instructions.map(hintInstruction), expHints);
       // Try to re-build
       for (let i = 0; i < parsed.msg.instructions.length; i++) {
         const info = instr[i];
@@ -1083,7 +1097,7 @@ describe('Solana', () => {
         const c = sol.CONTRACTS[data.program];
         // Multi-sig stuff
         try {
-          deepStrictEqual(c.instructions.encoders[info.type](info.info), data);
+          deepStrictEqual(c.instructions.encoders[info.TAG](info.data), data);
           count.ok++;
         } catch (e) {
           count.failed++;

@@ -81,8 +81,8 @@ const [txHash0, signedTx0] = sol.signTx(privKey, tx0);
 ### Decode transaction
 
 ```js
-const { base64 } = require('@scure/base');
-const sol = require('../lib');
+import { base64 } from '@scure/base';
+import * as sol from 'micro-sol-signer';
 
 // Random USDT tx from explorer:
 // https://explorer.solana.com/tx/5Nnhjv1GVB8T1k8MguUGHQw5zQQQsWET1f1zzj8azRhnVoYQPoZPtkscPCKy6FisP2eVWehjU1EYV8zywqKm5if4
@@ -179,7 +179,7 @@ const tokenSimple = sol.createTxComplex(
       amount: sol.parseDecimal(amount, USDT.decimals),
       decimals: USDT.decimals, // decimals of value
       mint: USDT.contract, // token contract address
-      owner: fromAccount, // owner of source token account (solana account)
+      authority: fromAccount, // owner of source token account (solana account)
       destination: toTokenAddress,
     }),
   ],
@@ -245,7 +245,7 @@ async function createTx(
     amount: sol.parseDecimal(amount, decimals),
     decimals,
     mint: tokenContract,
-    owner: fromAddress, // owner of source
+    authority: fromAddress, // owner of source
   };
   // If address is on curve, it is probably not 'associated token contract'
   if (sol.isOnCurve(toAddress)) {
