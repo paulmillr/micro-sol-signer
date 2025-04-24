@@ -11,19 +11,20 @@
   "types": "lib/index.d.ts",
   "exports": {
     ".": {
-      "types": "./lib/index.d.ts",
       "import": "./lib/esm/index.js",
-      "default": "./lib/index.js"
+      "require": "./lib/index.js"
+    },
+    "./hint.js": {
+      "import": "./lib/esm/hint.js",
+      "require": "./lib/hint.js"
     },
     "./net.js": {
-      "types": "./lib/net.d.ts",
       "import": "./lib/esm/net.js",
-      "default": "./lib/net.js"
+      "require": "./lib/net.js"
     },
     "./idl.js": {
-      "types": "./lib/idl/index.d.ts",
       "import": "./lib/esm/idl/index.js",
-      "default": "./lib/idl/index.js"
+      "require": "./lib/idl/index.js"
     }
   },
   "dependencies": {

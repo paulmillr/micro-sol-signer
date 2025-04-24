@@ -23,22 +23,24 @@ import * as sol from 'micro-sol-signer';
 Method summary:
 
 ```ts
-function formatPrivate(privateKey: Bytes, format: 'base58' | 'hex' | 'array' = 'base58');
-function getPublicKey(privateKey: Bytes);
-function getAddress(privateKey: Bytes);
-function getAddressFromPublicKey(publicKey: Bytes);
-function getPublicKeyFromAddress(address: string)
-function signTx(privateKey: Bytes, data: TxData): Promise<[string, string]>;
-function verifyTx(tx: TxData);
-function createTx(from: string, to: string, amount: bigint | string, blockhash: string);
-function createTxComplex(address: string, instructions: Instruction[], blockhash: string);
-function defineProgram<T extends Record<string, MethodHint<any>>>;
-function isOnCurve(bytes: Bytes | string);
-function parseInstruction(instr: Instruction, tl: TokenList): any;
-function programAddress(program: string, ...seeds: Bytes[]);
-function tokenAddress(mint: string, owner: string, allowOffCurveOwner = false);
-function tokenFromSymbol(symbol: string, tokens = COMMON_TOKENS);
-function validateAddress(address: string);
+const isOnCurve: typeof idl.isOnCurve;
+const programAddress: typeof idl.programAddress;
+function decodeAccount(contract: string, data: Bytes): unknown;
+function parseInstruction(instruction: Instruction): unknown;
+const CONTRACTS: Record<string, any>;
+type TxData = Bytes | string;
+function verifyTx(tx: TxData): void;
+function getPublicKey(privateKey: Bytes): Uint8Array<ArrayBufferLike>;
+function getAddress(privateKey: Bytes): string;
+type PrivateKeyFormat = 'base58' | 'hex' | 'array';
+function formatPrivate(privateKey: Bytes, format?: PrivateKeyFormat): string | number[];
+function formatPublic(publicKey: Bytes): string;
+function parseAddress(address: string): Uint8Array<ArrayBufferLike>;
+function createTx(address: string, instructions: Instruction[], blockhash: string, version?: Version): string;
+function createTransferSol(from: string, to: string, amount: bigint, blockhash: string, version?: Version): string;
+function createTokenTransfer(mint: string, from: string, to: string, amount: bigint, blockhash: string, tokenProgram?: string, version?: Version): string;
+function createTokenTransferChecked(mint: string, from: string, to: string, amount: bigint, decimals: bigint, blockhash: string, tokenProgram?: string, version?: Version): string;
+function signTx(privateKey: Bytes, data: TxData): [string, string];
 ```
 
 There are other variables such as `SYS_PROGRAM`, which are also exported. Specific features:

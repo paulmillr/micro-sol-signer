@@ -1,9 +1,11 @@
 {
   "name": "@paulmillr/micro-sol-signer",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "exports": {
     ".": "./src/index.ts",
-    "./net.js": "./src/net.ts"
+    "./hint.js": "./src/hint.ts",
+    "./net.js": "./src/net.ts",
+    "./idl.js": "./src/idl.ts"
   },
   "imports": {
     "@noble/curves": "jsr:@noble/curves@^1.9.0",
