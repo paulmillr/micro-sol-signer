@@ -1,6 +1,6 @@
 import { base58, base64 } from '@scure/base';
-import * as sol from './index.js';
-import type { TokenInfo } from './hint.js';
+import type { TokenInfo } from './hint.ts';
+import * as sol from './index.ts';
 
 // These seem official, but trigger rate-limit easily.
 // Paid one starts from $500, self-hosted will require 100+ TBs of storage.

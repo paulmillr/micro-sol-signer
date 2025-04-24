@@ -1,6 +1,6 @@
-import * as idl from './index.js';
 import * as P from 'micro-packed';
-import TokenIDL from './token.js';
+import * as idl from './index.ts';
+import TokenIDL from './token.ts';
 
 // Basic
 const assertType = <T>(_value: T) => {};

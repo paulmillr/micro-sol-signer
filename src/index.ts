@@ -1,16 +1,16 @@
 import { ed25519 } from '@noble/curves/ed25519';
 import { base58, base64, hex } from '@scure/base';
 import * as P from 'micro-packed';
-import * as idl from './idl/index.js';
-import { Decimal, PRECISION, pubKey, shortU16 } from './idl/index.js';
+import * as idl from './idl/index.ts';
+import { Decimal, PRECISION, pubKey, shortU16 } from './idl/index.ts';
 // System: solana IDLs
-import ALTIDL from './idl/alt.js';
-import ComputeBudgetIDL from './idl/computeBudget.js';
-import ConfigIDL from './idl/config.js';
-import MemoIDL from './idl/memo.js';
-import SystemIDL from './idl/system.js';
-import TokenIDL from './idl/token.js';
-import Token2022IDL from './idl/token2022.js';
+import ALTIDL from './idl/alt.ts';
+import ComputeBudgetIDL from './idl/computeBudget.ts';
+import ConfigIDL from './idl/config.ts';
+import MemoIDL from './idl/memo.ts';
+import SystemIDL from './idl/system.ts';
+import TokenIDL from './idl/token.ts';
+import Token2022IDL from './idl/token2022.ts';
 
 export type Bytes = Uint8Array;
 export { Decimal, PRECISION, pubKey, shortU16 };

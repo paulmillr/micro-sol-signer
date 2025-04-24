@@ -3,7 +3,7 @@ import { sha256 } from '@noble/hashes/sha256';
 import { concatBytes } from '@noble/hashes/utils';
 import { base16, base58, base64, utf8 } from '@scure/base';
 import * as P from 'micro-packed';
-import type { Instruction } from '../index.js';
+import type { Instruction } from '../index.ts';
 
 /*
 # What is IDL?
@@ -600,15 +600,15 @@ type GetTypeBase<T extends BasicType, DT extends DefinedTypes = {}> =
   T extends TypeLinkType ? GetTypeLink<T, DT> :
   // Passhrough
   T extends FixedSizeType ? GetType<T['type'], DT> :
-  T extends HiddenPrefixType ? GetType<T['type'], DT> : 
-  T extends HiddenSuffixType ? GetType<T['type'], DT> : 
+  T extends HiddenPrefixType ? GetType<T['type'], DT> :
+  T extends HiddenSuffixType ? GetType<T['type'], DT> :
   T extends PreOffsetType ? GetType<T['type'], DT> :
-  T extends PostOffsetType ? GetType<T['type'], DT> : 
-  T extends ZeroableType ? GetType<T['item'], DT> : 
+  T extends PostOffsetType ? GetType<T['type'], DT> :
+  T extends ZeroableType ? GetType<T['item'], DT> :
   T extends PrefixType ? GetType<T['type'], DT> :
-  T extends ConstantType ? GetType<T['type'], DT> : 
-  T extends RemainderOptionType ? GetType<T['item'], DT> | undefined : 
-  T extends OptionalType ? GetType<T['item'], DT> | undefined : 
+  T extends ConstantType ? GetType<T['type'], DT> :
+  T extends RemainderOptionType ? GetType<T['item'], DT> | undefined :
+  T extends OptionalType ? GetType<T['item'], DT> | undefined :
   unknown; // default
 
 export type GetType<T extends BasicType, DT extends DefinedTypes = {}> = T extends {

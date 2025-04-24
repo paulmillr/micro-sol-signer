@@ -1,4 +1,4 @@
-import * as sol from './index.js';
+import * as sol from './index.ts';
 
 export type TokenInfo = {
   symbol: string;
