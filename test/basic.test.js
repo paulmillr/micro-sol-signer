@@ -39,10 +39,7 @@ describe('Solana', () => {
   });
   should('address from public key', () => {
     const key = hex.decode('1b2f49096e3e5dbd0fcfa9c0c0cd92d9ab3b21544b34d5dd4a65d98b878b9922');
-    deepStrictEqual(
-      sol.formatPublic(key),
-      '2q7pyhPwAwZ3QMfZrnAbDhnh9mDUqycszcpf86VgQxhF'
-    );
+    deepStrictEqual(sol.formatPublic(key), '2q7pyhPwAwZ3QMfZrnAbDhnh9mDUqycszcpf86VgQxhF');
   });
   should('format private key base58', () => {
     const key = hex.decode('99da9559e15e913ee9ab2e53e3dfad575da33b49be1125bb922e33494f498828');
@@ -134,6 +131,33 @@ describe('Solana', () => {
     deepStrictEqual(base64.decode(sol.signTx(privKey, unsigned)[1]), expSigned);
     sol.verifyTx(expSigned);
     throws(() => sol.verifyTx(expUnsigned));
+    const message = base64.encode(
+      sol.Message.encode({
+        version: 'legacy',
+        feePayer: '2KW2XRd9kwqet15Aha2oK3tYvd3nWbTFH1MBiRAv1BE1',
+        blockhash: 'EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3hq1k',
+        instructions: [
+          {
+            program: '11111111111111111111111111111111',
+            keys: [
+              {
+                address: '2KW2XRd9kwqet15Aha2oK3tYvd3nWbTFH1MBiRAv1BE1',
+                sign: true,
+                write: true,
+              },
+              {
+                address: 'J3dxNj7nDRRqRRXuEMynDG57DkZK4jYRuv3Garmb1i99',
+                sign: false,
+                write: true,
+              },
+            ],
+            data: new Uint8Array([2, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0, 0]),
+          },
+        ],
+      })
+    );
+    deepStrictEqual(sol.getMessageFromTransaction(base64.encode(expSigned)), message);
+    deepStrictEqual(sol.getMessageFromTransaction(base64.encode(expUnsigned)), message);
   });
   should('sys/createAccount', () => {
     const opt = {
@@ -157,7 +181,10 @@ describe('Solana', () => {
       TAG: 'createAccount',
       data: opt,
     });
-    deepStrictEqual(hintInstruction(sol.sys.createAccount(opt)), 'Create new account=BvMRjBKGsr8NiAkRKC3h7tu1xvJQ2LK9hpQP783sNdQf with balance of 0.000000123 and owner program 11111111111111111111111111111111, using funding account 73c3aLQxue8M6Kj9Y3gxhkxzFeyB8vxYJLTw7Z8RxstQ');
+    deepStrictEqual(
+      hintInstruction(sol.sys.createAccount(opt)),
+      'Create new account=BvMRjBKGsr8NiAkRKC3h7tu1xvJQ2LK9hpQP783sNdQf with balance of 0.000000123 and owner program 11111111111111111111111111111111, using funding account 73c3aLQxue8M6Kj9Y3gxhkxzFeyB8vxYJLTw7Z8RxstQ'
+    );
   });
   should('sys/transfer (123)', () => {
     const opt = {
@@ -177,7 +204,10 @@ describe('Solana', () => {
       TAG: 'transferSol',
       data: opt,
     });
-    deepStrictEqual(hintInstruction(sol.sys.transferSol(opt)), 'Transfer 0.000000123 SOL from 9zM2WpVSyTKBmjpMiG7JTkmyRBdPVcKqCLQPnhMLqTxr to 3gqrRcuQ8xprBhymXS1FctNxi8hbw3bz5EgKBUgSWiQH');
+    deepStrictEqual(
+      hintInstruction(sol.sys.transferSol(opt)),
+      'Transfer 0.000000123 SOL from 9zM2WpVSyTKBmjpMiG7JTkmyRBdPVcKqCLQPnhMLqTxr to 3gqrRcuQ8xprBhymXS1FctNxi8hbw3bz5EgKBUgSWiQH'
+    );
   });
   should('sys/transfer (2**53)', () => {
     const opt = {
@@ -319,7 +349,10 @@ describe('Solana', () => {
       TAG: 'assign',
       data: opt,
     });
-    deepStrictEqual(hintInstruction(sol.sys.assign(opt)), 'Assign account=3RDNFUs75piNzG65Fpa6bRXP6F53MKg7dMVegSHGnUwD to owner program=7WCuK6QTsBTaunr9aTmfwxRjmMA7ahsHxJgdGt4sV2SH');
+    deepStrictEqual(
+      hintInstruction(sol.sys.assign(opt)),
+      'Assign account=3RDNFUs75piNzG65Fpa6bRXP6F53MKg7dMVegSHGnUwD to owner program=7WCuK6QTsBTaunr9aTmfwxRjmMA7ahsHxJgdGt4sV2SH'
+    );
   });
   should('sys/assignWithSeed', () => {
     const opt = {
@@ -408,7 +441,10 @@ describe('Solana', () => {
       TAG: 'advanceNonceAccount',
       data: opt,
     });
-    deepStrictEqual(hintInstruction(sol.sys.advanceNonceAccount(opt)), 'Consume nonce in nonce account=BkbGz5uBKb7F5v21PUe9AWpRg7JyAZp7wmPywUkMZuA3 (owner: 3ECJhLBQ9DAuKBKNjQGLEk3YqoFcF1YvhdayQ2C96eXF)');
+    deepStrictEqual(
+      hintInstruction(sol.sys.advanceNonceAccount(opt)),
+      'Consume nonce in nonce account=BkbGz5uBKb7F5v21PUe9AWpRg7JyAZp7wmPywUkMZuA3 (owner: 3ECJhLBQ9DAuKBKNjQGLEk3YqoFcF1YvhdayQ2C96eXF)'
+    );
   });
   should('sys/withdrawFromNonce', () => {
     const opt = {
@@ -432,7 +468,10 @@ describe('Solana', () => {
       TAG: 'withdrawNonceAccount',
       data: opt,
     });
-    deepStrictEqual(hintInstruction(sol.sys.withdrawNonceAccount(opt)), 'Withdraw 0.000000123 SOL from nonce account=FThSRTXNUEseFA7ZVPUAVbjAS3dWUtzyehnYxERgSy8K (owner: 7ssLmqfddcmkY5yTGFR1QHi6asuL15LyBnTG5GSSxiXN) to FwRPnndp5M5N6aLLZr6Dx9XMbLMQoJ9zLk2cB3easfej');
+    deepStrictEqual(
+      hintInstruction(sol.sys.withdrawNonceAccount(opt)),
+      'Withdraw 0.000000123 SOL from nonce account=FThSRTXNUEseFA7ZVPUAVbjAS3dWUtzyehnYxERgSy8K (owner: 7ssLmqfddcmkY5yTGFR1QHi6asuL15LyBnTG5GSSxiXN) to FwRPnndp5M5N6aLLZr6Dx9XMbLMQoJ9zLk2cB3easfej'
+    );
   });
   should('sys/authorizeNonce', () => {
     const opt = {
@@ -452,7 +491,10 @@ describe('Solana', () => {
       TAG: 'authorizeNonceAccount',
       data: opt,
     });
-    deepStrictEqual(hintInstruction(sol.sys.authorizeNonceAccount(opt)), 'Change owner of nonce account=Hozo7TadHq6PMMiGLGNvgk79Hvj5VTAM7Ny2bamQ2m8q from gyUeBThw5uL4PXSjSAtCUFnL4LtRXZf87NXGgxT6eNs to 4WmPCPTYwtMS7eM6WbfRd21H6VAA8eubEPzEDdt5WKfT');
+    deepStrictEqual(
+      hintInstruction(sol.sys.authorizeNonceAccount(opt)),
+      'Change owner of nonce account=Hozo7TadHq6PMMiGLGNvgk79Hvj5VTAM7Ny2bamQ2m8q from gyUeBThw5uL4PXSjSAtCUFnL4LtRXZf87NXGgxT6eNs to 4WmPCPTYwtMS7eM6WbfRd21H6VAA8eubEPzEDdt5WKfT'
+    );
   });
   should('programAddress', () => {
     let p = sol.programAddress('BPFLoader1111111111111111111111111111111111', new Uint8Array([]));
@@ -492,7 +534,7 @@ describe('Solana', () => {
     should('initializeMint', () => {
       const t = sol.token.initializeMint({
         mint: '7o36UsWR1JQLpZ9PE2gn9L4SQ69CNNiWAXd4Jt7rqz9Z',
-        decimals: 2n,
+        decimals: 2,
         mintAuthority: 'DShWnroshVbeUp28oopA3Pu7oFPDBtC1DBmPECXXAQ9n',
         freezeAuthority: 'DShWnroshVbeUp28oopA3Pu7oFPDBtC1DBmPECXXAQ9n',
       });
@@ -510,7 +552,7 @@ describe('Solana', () => {
     should('initializeMint (optional)', () => {
       const t = sol.token.initializeMint({
         mint: '7o36UsWR1JQLpZ9PE2gn9L4SQ69CNNiWAXd4Jt7rqz9Z',
-        decimals: 2n,
+        decimals: 2,
         mintAuthority: 'DShWnroshVbeUp28oopA3Pu7oFPDBtC1DBmPECXXAQ9n',
       });
       deepStrictEqual(t, {
@@ -727,7 +769,7 @@ describe('Solana', () => {
         destination: 'Hozo7TadHq6PMMiGLGNvgk79Hvj5VTAM7Ny2bamQ2m8q',
         authority: '3ECJhLBQ9DAuKBKNjQGLEk3YqoFcF1YvhdayQ2C96eXF',
         amount: 123n,
-        decimals: 10n,
+        decimals: 10,
       });
       deepStrictEqual(t, {
         program: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
@@ -747,7 +789,7 @@ describe('Solana', () => {
         delegate: 'Hozo7TadHq6PMMiGLGNvgk79Hvj5VTAM7Ny2bamQ2m8q',
         owner: '3ECJhLBQ9DAuKBKNjQGLEk3YqoFcF1YvhdayQ2C96eXF',
         amount: 123n,
-        decimals: 10n,
+        decimals: 10,
       });
       deepStrictEqual(t, {
         program: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
@@ -766,7 +808,7 @@ describe('Solana', () => {
         token: 'DShWnroshVbeUp28oopA3Pu7oFPDBtC1DBmPECXXAQ9n',
         mintAuthority: 'Hozo7TadHq6PMMiGLGNvgk79Hvj5VTAM7Ny2bamQ2m8q',
         amount: 123n,
-        decimals: 10n,
+        decimals: 10,
       });
       deepStrictEqual(t, {
         program: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
@@ -784,7 +826,7 @@ describe('Solana', () => {
         mint: 'DShWnroshVbeUp28oopA3Pu7oFPDBtC1DBmPECXXAQ9n',
         authority: 'Hozo7TadHq6PMMiGLGNvgk79Hvj5VTAM7Ny2bamQ2m8q',
         amount: 123n,
-        decimals: 10n,
+        decimals: 10,
       });
       deepStrictEqual(t, {
         program: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
@@ -843,9 +885,12 @@ describe('Solana', () => {
           },
         }
       );
-      deepStrictEqual(hintInstruction(t, {
-        '7o36UsWR1JQLpZ9PE2gn9L4SQ69CNNiWAXd4Jt7rqz9Z': { symbol: 'USDT' },
-      }), 'Initialize associated token account=DShWnroshVbeUp28oopA3Pu7oFPDBtC1DBmPECXXAQ9n with owner=Hozo7TadHq6PMMiGLGNvgk79Hvj5VTAM7Ny2bamQ2m8q for token=USDT, payed by 3ECJhLBQ9DAuKBKNjQGLEk3YqoFcF1YvhdayQ2C96eXF');
+      deepStrictEqual(
+        hintInstruction(t, {
+          '7o36UsWR1JQLpZ9PE2gn9L4SQ69CNNiWAXd4Jt7rqz9Z': { symbol: 'USDT' },
+        }),
+        'Initialize associated token account=DShWnroshVbeUp28oopA3Pu7oFPDBtC1DBmPECXXAQ9n with owner=Hozo7TadHq6PMMiGLGNvgk79Hvj5VTAM7Ny2bamQ2m8q for token=USDT, payed by 3ECJhLBQ9DAuKBKNjQGLEk3YqoFcF1YvhdayQ2C96eXF'
+      );
       // Unknown token!
       deepStrictEqual(sol.parseInstruction({ ...t, data: new Uint8Array([0]) }, {}), {
         TAG: 'createAssociatedToken',
@@ -856,8 +901,10 @@ describe('Solana', () => {
           mint: '7o36UsWR1JQLpZ9PE2gn9L4SQ69CNNiWAXd4Jt7rqz9Z',
         },
       });
-      deepStrictEqual(hintInstruction({ ...t, data: new Uint8Array([0]) }, {}),
-        'Initialize associated token account=DShWnroshVbeUp28oopA3Pu7oFPDBtC1DBmPECXXAQ9n with owner=Hozo7TadHq6PMMiGLGNvgk79Hvj5VTAM7Ny2bamQ2m8q for token=7o36UsWR1JQLpZ9PE2gn9L4SQ69CNNiWAXd4Jt7rqz9Z, payed by 3ECJhLBQ9DAuKBKNjQGLEk3YqoFcF1YvhdayQ2C96eXF');
+      deepStrictEqual(
+        hintInstruction({ ...t, data: new Uint8Array([0]) }, {}),
+        'Initialize associated token account=DShWnroshVbeUp28oopA3Pu7oFPDBtC1DBmPECXXAQ9n with owner=Hozo7TadHq6PMMiGLGNvgk79Hvj5VTAM7Ny2bamQ2m8q for token=7o36UsWR1JQLpZ9PE2gn9L4SQ69CNNiWAXd4Jt7rqz9Z, payed by 3ECJhLBQ9DAuKBKNjQGLEk3YqoFcF1YvhdayQ2C96eXF'
+      );
     });
   });
 });
