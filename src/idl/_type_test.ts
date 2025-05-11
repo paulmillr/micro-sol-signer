@@ -5,14 +5,14 @@ import TokenIDL from './token.ts';
 // Basic
 const assertType = <T>(_value: T) => {};
 
-assertType<bigint>(
+assertType<number>(
   1 as any as idl.GetType<{
     kind: 'numberTypeNode';
     format: 'u32';
     endian: 'le';
   }>
 );
-assertType<bigint | undefined>(
+assertType<number | undefined>(
   1 as any as idl.GetType<{
     kind: 'numberTypeNode';
     format: 'u32';
@@ -86,7 +86,7 @@ const args = [
 ] as const;
 
 export type t3 = idl.GetTypeArguments<typeof args, {}>;
-assertType<{ discriminator: undefined; amount: bigint | undefined; decimals: bigint }>(
+assertType<{ discriminator: undefined; amount: bigint | undefined; decimals: number }>(
   1 as unknown as idl.GetTypeArguments<typeof args, {}>
 );
 
@@ -267,7 +267,7 @@ a({
   destination: 'Hozo7TadHq6PMMiGLGNvgk79Hvj5VTAM7Ny2bamQ2m8q',
   authority: '3ECJhLBQ9DAuKBKNjQGLEk3YqoFcF1YvhdayQ2C96eXF',
   amount: 123n,
-  decimals: 10n,
+  decimals: 10,
 });
 
 type t22 = idl.AccountDefinitions<
@@ -295,7 +295,7 @@ t33.instructions.encoders.transferChecked({
   destination: 'Hozo7TadHq6PMMiGLGNvgk79Hvj5VTAM7Ny2bamQ2m8q',
   authority: '3ECJhLBQ9DAuKBKNjQGLEk3YqoFcF1YvhdayQ2C96eXF',
   amount: 123n,
-  decimals: 10n,
+  decimals: 10,
 });
 
 let a3 = idl.defineIDL(TokenIDL);
@@ -315,14 +315,14 @@ assertType<string>(
     number: { kind: 'numberTypeNode'; format: 'u32'; endian: 'le' };
   }>
 );
-assertType<bigint[]>(
+assertType<number[]>(
   1 as any as idl.GetType<{
     kind: 'arrayTypeNode';
     count: { kind: 'fixedCountNode'; value: 3 };
     item: { kind: 'numberTypeNode'; format: 'u32'; endian: 'le' };
   }>
 );
-assertType<Map<string, bigint>>(
+assertType<Map<string, number>>(
   1 as any as idl.GetType<{
     kind: 'mapTypeNode';
     key: { kind: 'fixedSizeTypeNode'; size: 3; type: { kind: 'stringTypeNode' } };
@@ -335,7 +335,7 @@ assertType<Map<string, bigint>>(
 );
 assertType<{
   A: string;
-  B: bigint;
+  B: number;
 }>(
   1 as any as idl.GetType<{
     kind: 'structTypeNode';
@@ -353,7 +353,7 @@ assertType<{
     ];
   }>
 );
-assertType<[string, bigint]>(
+assertType<[string, number]>(
   1 as any as idl.GetType<{
     kind: 'tupleTypeNode';
     items: [
@@ -362,10 +362,19 @@ assertType<[string, bigint]>(
     ];
   }>
 );
+assertType<[string, bigint]>(
+  1 as any as idl.GetType<{
+    kind: 'tupleTypeNode';
+    items: [
+      { kind: 'fixedSizeTypeNode'; size: 3; type: { kind: 'stringTypeNode' } },
+      { kind: 'numberTypeNode'; format: 'u64'; endian: 'le' },
+    ];
+  }>
+);
 assertType<
   | { TAG: 'flip' }
-  | { TAG: 'rotate'; data: [bigint] }
-  | { TAG: 'move'; data: { x: bigint; y: bigint } }
+  | { TAG: 'rotate'; data: [number] }
+  | { TAG: 'move'; data: { x: number; y: number } }
 >(
   1 as any as idl.GetType<{
     kind: 'enumTypeNode';
@@ -419,7 +428,7 @@ assertType<string>(
 assertType<bigint>(
   1 as any as idl.GetType<{ kind: 'definedTypeLinkNode'; name: 'NumberType' }, TestDefinedTypes>
 );
-assertType<[string, bigint]>(
+assertType<[string, number]>(
   1 as any as idl.GetType<{ kind: 'definedTypeLinkNode'; name: 'CustomTuple' }, TestDefinedTypes>
 );
 // PDAs

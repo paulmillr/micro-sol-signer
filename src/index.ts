@@ -11,9 +11,9 @@ import MemoIDL from './idl/memo.ts';
 import SystemIDL from './idl/system.ts';
 import TokenIDL from './idl/token.ts';
 import Token2022IDL from './idl/token2022.ts';
-
-export type Bytes = Uint8Array;
+export { Offchain } from './offchain.ts';
 export { Decimal, PRECISION, pubKey, shortU16 };
+export type Bytes = Uint8Array;
 
 const MAX_TX_SIZE = 1280 - 40 - 8;
 
@@ -395,13 +395,12 @@ type TxData = Bytes | string;
 export function verifyTx(tx: TxData) {
   if (typeof tx === 'string') tx = base64.decode(tx);
   if (tx.length > MAX_TX_SIZE) throw new Error('sol: transaction too big');
-  const parsed = Transaction.decode(tx);
   const raw = TransactionRaw.decode(tx);
   const msg = MessageRaw.encode(raw.msg);
   for (let i = 0; i < raw.msg.data.header.requiredSignatures; i++) {
     const address = raw.msg.data.keys[i];
     const pubKey = base58.decode(address);
-    const sig = parsed.signatures[address];
+    const sig = raw.signatures[i];
     if (!ed25519.verify(sig, msg, pubKey))
       throw new Error(`sol: invalid signature sig=${sig} msg=${msg}`);
   }
@@ -558,4 +557,21 @@ export function signTx(privateKey: Bytes, data: TxData): [string, string] {
   const tx = base64.encode(TransactionRaw.encode(raw));
   // first signature is txHash
   return [base58.encode(sig), tx];
+}
+
+/**
+ * Warning: It is NOT secure to sign random msgs,
+ * because someone can create a message which is an encoded transaction.
+ */
+export function signBytes(privateKey: Uint8Array, msg: Uint8Array) {
+  return base58.encode(ed25519.sign(msg, privateKey));
+}
+export function verifyBytes(sigature: string, publicKey: Uint8Array | string, msg: Uint8Array) {
+  if (typeof publicKey === 'string') publicKey = base58.decode(publicKey);
+  return ed25519.verify(base58.decode(sigature), msg, publicKey);
+}
+
+export function getMessageFromTransaction(tx: string) {
+  const raw = TransactionRaw.decode(base64.decode(tx));
+  return base64.encode(MessageRaw.encode(raw.msg));
 }
