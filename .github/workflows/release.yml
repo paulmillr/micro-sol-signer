@@ -8,7 +8,7 @@ jobs:
     uses: paulmillr/jsbt/.github/workflows/release.yml@3b4712c94bff7a5da5c968f783292061e81b218c
     with:
       build-path: test/build
-      # slow-types: false
+      slow-types: true
     secrets:
       NPM_PUBLISH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
     permissions:
