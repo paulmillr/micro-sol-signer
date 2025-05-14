@@ -1,9 +1,9 @@
-import { deepStrictEqual, throws } from 'node:assert';
+import { base64, hex } from '@scure/base';
 import { describe, should } from 'micro-should';
-import { hex, base64 } from '@scure/base';
+import { deepStrictEqual, throws } from 'node:assert';
 import fs from 'node:fs';
-import * as sol from '../lib/esm/index.js';
 import { hintInstruction } from '../lib/esm/hint.js';
+import * as sol from '../lib/esm/index.js';
 
 const vectors = JSON.parse(fs.readFileSync(new URL('vectors-sol.json', import.meta.url)));
 
@@ -97,7 +97,7 @@ describe('Solana', () => {
           '3sNzSjg8pmvbcRb8wgL6SvRqNLbkLha38hRUEWKVdC1M',
         ],
         blockhash: 'J2BjKU6L83eehHVgoze6uTXGCBu6nbxsqEro9QvWpU52',
-        instructions: [{ programIdx: 2, keys: [1, 0], data: new Uint8Array() }],
+        instructions: [{ programIdx: 2, keys: [1, 0], data: Uint8Array.of() }],
       },
     };
     deepStrictEqual(
