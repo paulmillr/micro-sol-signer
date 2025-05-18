@@ -1042,7 +1042,7 @@ export type ParsedInstructions<
       inst: GetInstructionArgs<Extract<T[number], { name: K }>, DT>
     ) => Instruction;
   };
-  decoder: (inst: Instruction) => DecodedInstruction<T[number], DT>;
+  decoder: (inst: Instruction, opts?: P.ReaderOpts) => DecodedInstruction<T[number], DT>;
 };
 
 function parseInstructions<
@@ -1079,9 +1079,9 @@ function parseInstructions<
     decoders[i.name] = decodeDiscriminators(i.discriminators || [], type, i, types);
   }
   const decoderData = buildDecoder(decoders);
-  const decoder = (inst: Instruction) => {
+  const decoder = (inst: Instruction, opts?: P.ReaderOpts) => {
     if (inst.program !== contract) throw new Error('wrong program address');
-    const data = decoderData(inst.data);
+    const data = decoderData(inst.data, opts);
     const instMeta = instNames[data.TAG];
     const accounts = instMeta.accounts;
 
@@ -1117,16 +1117,10 @@ type DecodedAccount<T extends ArrLike<ContractAccount>, DT extends DefinedTypes 
 }[T[number]['name']];
 
 export type AccountDefinitions<T extends ArrLike<ContractAccount>, DT extends DefinedTypes = {}> = {
-  encoders: {
-    [K in T[number]['name']]: (
-      data: GetType<Extract<T[number], { name: K }>['data'], DT>
-    ) => Uint8Array;
+  coders: {
+    [K in T[number]['name']]: P.CoderType<GetType<Extract<T[number], { name: K }>['data'], DT>>;
   };
-  decoders: {
-    [K in T[number]['name']]: (
-      data: Uint8Array
-    ) => GetType<Extract<T[number], { name: K }>['data'], DT>;
-  };
+
   decoder: (data: Uint8Array, opts?: P.ReaderOpts) => DecodedAccount<T, DT>;
 };
 
@@ -1134,18 +1128,24 @@ export function defineAccounts<T extends ArrLike<ContractAccount>, DT extends De
   accounts: T,
   types: DT
 ): AccountDefinitions<T, DT> {
-  const encoders: Record<string, any> = {};
+  const coders: Record<string, any> = {};
   const decoders: Record<string, any> = {};
-  const rawDecoders: Record<string, any> = {};
   for (const a of accounts) {
     if (a.kind !== 'accountNode') throw new Error('wrong accountNode');
     const type = (mapType as any)(a.data, types);
-    encoders[a.name] = type.encode;
-    rawDecoders[a.name] = type.decode;
+    // If size not available by coder construction: extract from size discriminator
+    if (type.size === undefined) {
+      for (const d of a.discriminators || []) {
+        if (d.kind !== 'sizeDiscriminatorNode') continue;
+        type.size = d.size;
+        break;
+      }
+    }
+    coders[a.name] = type;
     decoders[a.name] = decodeDiscriminators(a.discriminators || [], type, a, types);
   }
   const decoder = buildDecoder(decoders);
-  return { encoders, decoder, decoders: rawDecoders } as any;
+  return { coders, decoder } as any;
 }
 
 type Program = {

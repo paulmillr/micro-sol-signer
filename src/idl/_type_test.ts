@@ -275,7 +275,7 @@ type t22 = idl.AccountDefinitions<
   idl.GetDefinedTypes<(typeof TokenIDL)['program']['definedTypes']>
 >;
 
-type t23 = t22['encoders']['token'];
+type t23 = t22['coders']['token']['encode'];
 let a2 = 1 as any as t23;
 a2({
   owner: '1',

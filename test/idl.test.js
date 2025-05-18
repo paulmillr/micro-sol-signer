@@ -683,7 +683,7 @@ describe('Solana', () => {
       const dataBytes = base64.decode(data);
       deepStrictEqual(sol.decodeAccount(contract, dataBytes), exp);
       const program = sol.CONTRACTS[contract];
-      deepStrictEqual(program.accounts.encoders[exp.TAG](exp.data), dataBytes);
+      deepStrictEqual(program.accounts.coders[exp.TAG].encode(exp.data), dataBytes);
     }
   });
   should('parseInstructions', () => {
@@ -1136,6 +1136,9 @@ describe('Solana', () => {
       }
     }
     deepStrictEqual(count, { ok: 10, failed: 13 });
+  });
+  should('IDL type size', () => {
+    deepStrictEqual(sol.PROGRAMS.Token.token.accounts.coders.token.size, 165);
   });
 });
 
