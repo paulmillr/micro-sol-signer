@@ -306,7 +306,7 @@ function parseValueInt<
   DT extends DefinedTypes,
 >(value: T, _pdas: PDAs<PT, DT>, _dt: DT) {
   // Everything is bigint, except things that used as counters (array length/etc)
-  if (value.kind === 'numberValueNode') return BigInt(value.number);
+  if (value.kind === 'numberValueNode') return value.number;
   if (value.kind === 'noneValueNode') return undefined;
   if (value.kind === 'booleanValueNode') return value.boolean;
   if (value.kind === 'bytesValueNode') {
@@ -370,44 +370,74 @@ type ConstantDiscriminator = Node<
 >;
 type Discriminator = SizeDiscriminator | FieldDiscriminator | ConstantDiscriminator;
 // Types
+// prettier-ignore
+const NumCoders = {
+  shortU16: { le: shortU16, be: shortU16, bigint: false }, // Solana
+  u8:       { le: P.U8,     be: P.U8    , bigint: false }, // Unsigned
+  u16:      { le: P.U16LE,  be: P.U16BE , bigint: false },
+  u32:      { le: P.U32LE,  be: P.U32BE , bigint: false },
+  u64:      { le: P.U64LE,  be: P.U64BE , bigint: true  },
+  u128:     { le: P.U128LE, be: P.U128BE, bigint: true  },
+  i8:       { le: P.I8,     be: P.I8    , bigint: false }, // Signed
+  i16:      { le: P.I16LE,  be: P.I16BE , bigint: false },
+  i32:      { le: P.I32LE,  be: P.I32BE , bigint: false },
+  i64:      { le: P.I64LE,  be: P.I64BE , bigint: true  },
+  i128:     { le: P.I128LE, be: P.I128BE, bigint: true  },
+  f32:      { le: P.F32LE,  be: P.F32BE , bigint: false }, // Float
+  f64:      { le: P.F64LE,  be: P.F64BE , bigint: false },
+} as const;
+
+type BigIntCoders = {
+  [K in keyof typeof NumCoders]: (typeof NumCoders)[K]['bigint'] extends true ? K : never;
+}[keyof typeof NumCoders];
+
 type NumericType = Node<
   'numberTypeNode',
   {
-    readonly format: 'shortU16' | 'u8' | 'i8' | 'u16' | 'i16' | 'u32' | 'i32' | 'u64' | 'i64';
+    readonly format: 'shortU16' | keyof typeof NumCoders;
     readonly endian?: 'le' | 'be';
   }
 > &
   DefaultValueDef<'number'>;
 
+type GetTypeNumeric<T extends NumericType> = T['format'] extends BigIntCoders ? bigint : number;
+
 // As bigint
 function parseNumeric(type: NumericType) {
   if (type.kind !== 'numberTypeNode') throw new Error('wrong numberTypeNode');
-  if (type.format === 'shortU16') return P.apply(shortU16, fromBigint);
-  if (type.format === 'u8') return P.apply(P.U8, fromBigint);
-  if (type.format === 'i8') return P.apply(P.I8, fromBigint);
-  if (type.format === 'i16') return P.apply(type.endian === 'le' ? P.I16LE : P.I16BE, fromBigint);
-  if (type.format === 'u16') return P.apply(type.endian === 'le' ? P.U16LE : P.U16BE, fromBigint);
-  if (type.format === 'i32') return P.apply(type.endian === 'le' ? P.I32LE : P.I32BE, fromBigint);
-  if (type.format === 'u32') return P.apply(type.endian === 'le' ? P.U32LE : P.U32BE, fromBigint);
-  if (type.format === 'i64') return type.endian === 'le' ? P.I64LE : P.I64BE;
-  if (type.format === 'u64') return type.endian === 'le' ? P.U64LE : P.U64BE;
-  throw new Error('wrong numeric type');
+  const endian = type.endian || 'le';
+  if (endian !== 'le' && endian !== 'be') throw new Error('numberTypeNode: wrong endian');
+  let format = NumCoders[type.format][endian];
+  if (!format) throw new Error('wrong numeric type');
+  // Allow writing number to bigint coders
+  const isBigint = NumCoders[type.format].bigint;
+  if (isBigint) {
+    return P.apply(format as P.CoderType<bigint>, {
+      encode: (from) => from,
+      decode(to) {
+        if (typeof to !== 'bigint' && Number.isSafeInteger(to)) return BigInt(to);
+        return to;
+      },
+    }) as P.CoderType<bigint | number>;
+  }
+  return format;
 }
 // As number (for counts). TODO: merge with parseNumeric
-function parseNumericSafe(type: NumericType) {
-  if (type.kind !== 'numberTypeNode') throw new Error('wrong numberTypeNode');
-  if (type.format === 'u8') return P.U8;
-  if (type.format === 'i8') return P.I8;
-  if (type.format === 'shortU16') return shortU16;
-  if (type.format === 'u16') return type.endian === 'le' ? P.U16LE : P.U16BE;
-  if (type.format === 'i16') return type.endian === 'le' ? P.I16LE : P.I16BE;
-  if (type.format === 'u32') return type.endian === 'le' ? P.U32LE : P.U32BE;
-  if (type.format === 'i32') return type.endian === 'le' ? P.I32LE : P.I32BE;
-  if (type.format === 'u64')
-    return P.apply(type.endian === 'le' ? P.U64LE : P.U64BE, P.coders.numberBigint);
-  if (type.format === 'i64')
-    return P.apply(type.endian === 'le' ? P.I64LE : P.I64BE, P.coders.numberBigint);
-  throw new Error('wrong numeric type');
+function parseNumericSafe(type: NumericType): P.CoderType<number> {
+  const t = parseNumeric(type);
+  const isBigint = NumCoders[type.format].bigint;
+  // On read replace bigints with numbers
+  if (isBigint) {
+    return P.apply(t as P.CoderType<bigint | number>, {
+      encode(from) {
+        if (from > BigInt(Number.MAX_SAFE_INTEGER))
+          throw new Error(`element bigger than MAX_SAFE_INTEGER=${from}`);
+        return Number(from);
+      },
+      decode: (to) => to,
+    }) as P.CoderType<number>;
+  }
+  return t as P.CoderType<number>;
 }
 
 type CountType =
@@ -585,7 +615,7 @@ type GetTypeLink<T extends TypeLinkType, DT extends DefinedTypes = {}> = T['name
 // prettier-ignore
 type GetTypeBase<T extends BasicType, DT extends DefinedTypes = {}> =
   // Basic
-  T extends NumericType ? bigint :
+  T extends NumericType ? GetTypeNumeric<T> :
   T extends BooleanType ? boolean :
   T extends StringType ? string :
   T extends AmountType ? string :
@@ -629,9 +659,13 @@ const types: Record<string, (type: any, dt: DefinedTypes) => P.CoderType<any>> =
   numberTypeNode: (type: NumericType) => parseNumeric(type),
   booleanTypeNode: (type: BooleanType) => P.apply(parseNumericSafe(type.size), numBool),
   bytesTypeNode: (_type: BytesType) => P.bytes(null),
-  stringTypeNode: (_type: StringType) => P.string(null),
+  // Strip zero bytes from string: ugly, but required for compatibility with solana utf8 coder
+  stringTypeNode: (_type: StringType) =>
+    P.validate(P.string(null), (s) => s.replace(/\u0000/g, '')),
   amountTypeNode: (type: AmountType) => {
-    const x = parseNumeric(type.number);
+    let x = parseNumeric(type.number) as any;
+    if (!NumCoders[type.number.format].bigint) x = P.apply(x, fromBigint);
+    // fromBigint
     const x2 = P.apply(x, P.coders.decimal(type.decimals));
     return P.apply(x2, stringPostfix(` ${type.unit}`));
   },
@@ -695,8 +729,10 @@ const types: Record<string, (type: any, dt: DefinedTypes) => P.CoderType<any>> =
   tupleTypeNode: (type: TupleType, dt: DefinedTypes = {}) =>
     P.tuple(type.items.map((i) => (mapType as any)(i, dt))),
   definedTypeLinkNode: (type: DefinedType, dt: DefinedTypes = {}) => {
-    if (!dt[type.name]) throw new Error('unknown type: ' + type.name);
-    return dt[type.name];
+    return P.lazy(() => {
+      if (!dt[type.name]) throw new Error('unknown type: ' + type.name);
+      return dt[type.name];
+    });
   },
   zeroableOptionTypeNode: <T extends ZeroableType>(type: T, dt: DefinedTypes = {}) =>
     zeroable((mapType as any)(type.item, dt)),
@@ -921,7 +957,7 @@ function decodeDiscriminators(
   node: any,
   types: DefinedTypes
 ) {
-  return (data: Uint8Array) => {
+  return (data: Uint8Array, opts?: P.ReaderOpts) => {
     // This is slower and worse than previous version via tag, but significantly more flexible
     for (const d of discriminators) {
       if (d.kind === 'sizeDiscriminatorNode' && data.length !== d.size) return false;
@@ -934,15 +970,17 @@ function decodeDiscriminators(
         if (!P.utils.equalBytes(bytes, realBytes)) return false;
       }
     }
-    return coder.decode(data);
+    return coder.decode(data, opts);
   };
 }
 
-function buildDecoder<T extends Record<string, (data: Uint8Array) => any>>(decoders: T) {
+function buildDecoder<T extends Record<string, (data: Uint8Array, opts?: P.ReaderOpts) => any>>(
+  decoders: T
+) {
   // TODO: P.match?
-  return (data: Uint8Array) => {
+  return (data: Uint8Array, opts?: P.ReaderOpts) => {
     for (const [name, decoder] of Object.entries(decoders)) {
-      const value = decoder(data);
+      const value = decoder(data, opts);
       if (value !== false) return { TAG: name, data: value };
     }
     throw new Error('Unknown value');
@@ -1004,7 +1042,7 @@ export type ParsedInstructions<
       inst: GetInstructionArgs<Extract<T[number], { name: K }>, DT>
     ) => Instruction;
   };
-  decoder: (inst: Instruction) => DecodedInstruction<T[number], DT>;
+  decoder: (inst: Instruction, opts?: P.ReaderOpts) => DecodedInstruction<T[number], DT>;
 };
 
 function parseInstructions<
@@ -1041,9 +1079,9 @@ function parseInstructions<
     decoders[i.name] = decodeDiscriminators(i.discriminators || [], type, i, types);
   }
   const decoderData = buildDecoder(decoders);
-  const decoder = (inst: Instruction) => {
+  const decoder = (inst: Instruction, opts?: P.ReaderOpts) => {
     if (inst.program !== contract) throw new Error('wrong program address');
-    const data = decoderData(inst.data);
+    const data = decoderData(inst.data, opts);
     const instMeta = instNames[data.TAG];
     const accounts = instMeta.accounts;
 
@@ -1079,28 +1117,35 @@ type DecodedAccount<T extends ArrLike<ContractAccount>, DT extends DefinedTypes 
 }[T[number]['name']];
 
 export type AccountDefinitions<T extends ArrLike<ContractAccount>, DT extends DefinedTypes = {}> = {
-  encoders: {
-    [K in T[number]['name']]: (
-      data: GetType<Extract<T[number], { name: K }>['data'], DT>
-    ) => Uint8Array;
+  coders: {
+    [K in T[number]['name']]: P.CoderType<GetType<Extract<T[number], { name: K }>['data'], DT>>;
   };
-  decoder: (data: Uint8Array) => DecodedAccount<T, DT>;
+
+  decoder: (data: Uint8Array, opts?: P.ReaderOpts) => DecodedAccount<T, DT>;
 };
 
 export function defineAccounts<T extends ArrLike<ContractAccount>, DT extends DefinedTypes>(
   accounts: T,
   types: DT
 ): AccountDefinitions<T, DT> {
-  const encoders: Record<string, any> = {};
+  const coders: Record<string, any> = {};
   const decoders: Record<string, any> = {};
   for (const a of accounts) {
     if (a.kind !== 'accountNode') throw new Error('wrong accountNode');
     const type = (mapType as any)(a.data, types);
-    encoders[a.name] = type.encode;
+    // If size not available by coder construction: extract from size discriminator
+    if (type.size === undefined) {
+      for (const d of a.discriminators || []) {
+        if (d.kind !== 'sizeDiscriminatorNode') continue;
+        type.size = d.size;
+        break;
+      }
+    }
+    coders[a.name] = type;
     decoders[a.name] = decodeDiscriminators(a.discriminators || [], type, a, types);
   }
   const decoder = buildDecoder(decoders);
-  return { encoders, decoder } as any;
+  return { coders, decoder } as any;
 }
 
 type Program = {

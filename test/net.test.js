@@ -1,12 +1,11 @@
-import { deepStrictEqual, throws } from 'node:assert';
-import { describe, should } from 'micro-should';
-import { URL, ArchiveNodeProvider, calcTransfersDiff } from '../lib/esm/net.js';
 import * as mftch from 'micro-ftch';
-import * as sol from '../lib/esm/index.js';
+import { describe, should } from 'micro-should';
+import { deepStrictEqual } from 'node:assert';
 import { COMMON_TOKENS } from '../lib/esm/hint.js';
-import { default as NET_TRANSFERS } from './vectors/net_transfers.mjs';
+import { ArchiveNodeProvider, calcTransfersDiff, URL } from '../lib/esm/net.js';
 import { default as NET_BASIC } from './vectors/net_basic.mjs';
 import { default as NET_TOKEN_VALID } from './vectors/net_token_valid.mjs';
+import { default as NET_TRANSFERS } from './vectors/net_transfers.mjs';
 
 const getKey = (url, opt) => JSON.stringify({ url: 'https://NODE_URL/', opt });
 
@@ -21,7 +20,7 @@ describe('Net', () => {
       lamports: 1090000n,
       owner: '11111111111111111111111111111111',
       rentEpoch: 18446744073709552000,
-      data: new Uint8Array(),
+      data: Uint8Array.of(),
       exec: false,
     });
     deepStrictEqual(await archive.accountInfo(addr2), undefined);

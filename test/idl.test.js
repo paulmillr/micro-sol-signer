@@ -76,7 +76,7 @@ describe('Solana', () => {
             ],
           },
           values: {
-            '666f6f2a00': ['foo', 42n],
+            '666f6f2a00': ['foo', 42],
           },
         },
         // {
@@ -139,7 +139,7 @@ describe('Solana', () => {
             ],
           },
           values: {
-            '00000000aaff': [0xaan, 0xffn],
+            '00000000aaff': [0xaa, 0xff],
           },
         },
         {
@@ -156,7 +156,7 @@ describe('Solana', () => {
             ],
           },
           values: {
-            aa00000000ff: [0xaan, 0xffn],
+            aa00000000ff: [0xaa, 0xff],
           },
         },
         {
@@ -198,7 +198,7 @@ describe('Solana', () => {
           },
           values: {
             '00': undefined,
-            '012a00': 42n,
+            '012a00': 42,
           },
         },
         {
@@ -209,7 +209,7 @@ describe('Solana', () => {
           },
           values: {
             '00000000': undefined,
-            '010000002a00': 42n,
+            '010000002a00': 42,
           },
         },
         {
@@ -220,7 +220,7 @@ describe('Solana', () => {
           },
           values: {
             '000000': undefined,
-            '012a00': 42n,
+            '012a00': 42,
           },
         },
         {
@@ -231,7 +231,7 @@ describe('Solana', () => {
           },
           values: {
             '0000000000': undefined,
-            '012A000000': 42n,
+            '012A000000': 42,
           },
         },
         {
@@ -245,7 +245,21 @@ describe('Solana', () => {
             },
           },
           values: {
-            '03000000666f6f2a00626172630062617a8a02': { foo: 42n, bar: 99n, baz: 650n },
+            '03000000666f6f2a00626172630062617a8a02': { foo: 42, bar: 99, baz: 650 },
+          },
+        },
+        {
+          type: {
+            kind: 'mapTypeNode',
+            key: { kind: 'fixedSizeTypeNode', size: 3, type: { kind: 'stringTypeNode' } },
+            value: { kind: 'numberTypeNode', format: 'u16', endian: 'le' },
+            count: {
+              kind: 'prefixedCountNode',
+              prefix: { kind: 'numberTypeNode', format: 'u64', endian: 'le' },
+            },
+          },
+          values: {
+            '0300000000000000666f6f2a00626172630062617a8a02': { foo: 42, bar: 99, baz: 650 },
           },
         },
         {
@@ -256,7 +270,7 @@ describe('Solana', () => {
             count: { kind: 'fixedCountNode', value: 3 },
           },
           values: {
-            '666f6f2a00626172630062617a8a02': { foo: 42n, bar: 99n, baz: 650n },
+            '666f6f2a00626172630062617a8a02': { foo: 42, bar: 99, baz: 650 },
           },
         },
         {
@@ -267,7 +281,22 @@ describe('Solana', () => {
             count: { kind: 'remainderCountNode' },
           },
           values: {
-            '666f6f2a00626172630062617a8a02': { foo: 42n, bar: 99n, baz: 650n },
+            '666f6f2a00626172630062617a8a02': { foo: 42, bar: 99, baz: 650 },
+          },
+        },
+        {
+          type: {
+            kind: 'mapTypeNode',
+            key: { kind: 'fixedSizeTypeNode', size: 3, type: { kind: 'stringTypeNode' } },
+            value: { kind: 'numberTypeNode', format: 'u64', endian: 'le' },
+            count: { kind: 'remainderCountNode' },
+          },
+          values: {
+            '666f6f2a00000000000000626172630000000000000062617a8a02000000000000': {
+              foo: 42n,
+              bar: 99n,
+              baz: 650n,
+            },
           },
         },
         {
@@ -307,8 +336,8 @@ describe('Solana', () => {
           },
           values: {
             '00': { TAG: 'flip', data: undefined },
-            '012A000000': { TAG: 'rotate', data: [42n] },
-            '0201000200': { TAG: 'move', data: { x: 1n, y: 2n } },
+            '012A000000': { TAG: 'rotate', data: [42] },
+            '0201000200': { TAG: 'move', data: { x: 1, y: 2 } },
           },
         },
       ];
@@ -333,7 +362,7 @@ describe('Solana', () => {
           data: {
             deactivationSlot: 18446744073709551615n,
             lastExtendedSlot: 319548548n,
-            lastExtendedSlotStartIndex: 35n,
+            lastExtendedSlotStartIndex: 35,
             authority: 'HDCQMFxao4QUYKkn2rnzQSBbjkkh5UPX1b2UTqZF7vji',
             addresses: [
               '11111111111111111111111111111111',
@@ -390,7 +419,7 @@ describe('Solana', () => {
           data: {
             deactivationSlot: 18446744073709551615n,
             lastExtendedSlot: 301517194n,
-            lastExtendedSlotStartIndex: 22n,
+            lastExtendedSlotStartIndex: 22,
             authority: '9RAufBfjGQjDfrwxeyKmZWPADHSb8HcoqCdrmpqvCr1g',
             addresses: [
               '9Yycgce8GkfNiBgm9ubVXckNkW6xn66LPsqmCJo3zHHY',
@@ -654,7 +683,7 @@ describe('Solana', () => {
       const dataBytes = base64.decode(data);
       deepStrictEqual(sol.decodeAccount(contract, dataBytes), exp);
       const program = sol.CONTRACTS[contract];
-      deepStrictEqual(program.accounts.encoders[exp.TAG](exp.data), dataBytes);
+      deepStrictEqual(program.accounts.coders[exp.TAG].encode(exp.data), dataBytes);
     }
   });
   should('parseInstructions', () => {
@@ -681,7 +710,8 @@ describe('Solana', () => {
             newAccount: 'BvMRjBKGsr8NiAkRKC3h7tu1xvJQ2LK9hpQP783sNdQf',
           },
         },
-        expHint: 'Create new account=BvMRjBKGsr8NiAkRKC3h7tu1xvJQ2LK9hpQP783sNdQf with balance of 0.000000123 and owner program 11111111111111111111111111111111, using funding account 73c3aLQxue8M6Kj9Y3gxhkxzFeyB8vxYJLTw7Z8RxstQ',
+        expHint:
+          'Create new account=BvMRjBKGsr8NiAkRKC3h7tu1xvJQ2LK9hpQP783sNdQf with balance of 0.000000123 and owner program 11111111111111111111111111111111, using funding account 73c3aLQxue8M6Kj9Y3gxhkxzFeyB8vxYJLTw7Z8RxstQ',
       },
       // sys/transfer (123)
       {
@@ -701,7 +731,8 @@ describe('Solana', () => {
             destination: '3gqrRcuQ8xprBhymXS1FctNxi8hbw3bz5EgKBUgSWiQH',
           },
         },
-        expHint: 'Transfer 0.000000123 SOL from 9zM2WpVSyTKBmjpMiG7JTkmyRBdPVcKqCLQPnhMLqTxr to 3gqrRcuQ8xprBhymXS1FctNxi8hbw3bz5EgKBUgSWiQH',
+        expHint:
+          'Transfer 0.000000123 SOL from 9zM2WpVSyTKBmjpMiG7JTkmyRBdPVcKqCLQPnhMLqTxr to 3gqrRcuQ8xprBhymXS1FctNxi8hbw3bz5EgKBUgSWiQH',
       },
       // sys/transfer (2**53)
       {
@@ -803,7 +834,7 @@ describe('Solana', () => {
           {
             TAG: 'initializeMint',
             data: {
-              decimals: 9n,
+              decimals: 9,
               mintAuthority: '3z9vL1zjN6qyAFHhHQdWYRTFAcy69pJydkZmSFBKHg1R',
               mint: '99zqUzQGohamfYxyo8ykTEbi91iom3CLmwCA75FK5zTg',
             },
@@ -855,7 +886,7 @@ describe('Solana', () => {
             TAG: 'mintToChecked',
             data: {
               amount: 100000000000n,
-              decimals: 9n,
+              decimals: 9,
               mint: '99zqUzQGohamfYxyo8ykTEbi91iom3CLmwCA75FK5zTg',
               token: 'AfB7uwBEsGtrrBqPTVqEgzWed5XdYfM1psPNLmf7EeX9',
               mintAuthority: '3z9vL1zjN6qyAFHhHQdWYRTFAcy69pJydkZmSFBKHg1R',
@@ -870,7 +901,7 @@ describe('Solana', () => {
             TAG: 'mintToChecked',
             data: {
               amount: 100000000000n,
-              decimals: 9n,
+              decimals: 9,
               mint: '99zqUzQGohamfYxyo8ykTEbi91iom3CLmwCA75FK5zTg',
               token: 'Hmyk3FSw4cfsuAes7sanp2oxSkE9ivaH6pMzDzbacqmt',
               mintAuthority: '3z9vL1zjN6qyAFHhHQdWYRTFAcy69pJydkZmSFBKHg1R',
@@ -885,7 +916,7 @@ describe('Solana', () => {
             TAG: 'transferChecked',
             data: {
               amount: 100000000000n,
-              decimals: 9n,
+              decimals: 9,
               source: 'AfB7uwBEsGtrrBqPTVqEgzWed5XdYfM1psPNLmf7EeX9',
               mint: '99zqUzQGohamfYxyo8ykTEbi91iom3CLmwCA75FK5zTg',
               destination: 'Hmyk3FSw4cfsuAes7sanp2oxSkE9ivaH6pMzDzbacqmt',
@@ -918,12 +949,12 @@ describe('Solana', () => {
           {
             TAG: 'initializeMint',
             data: {
-              decimals: 9n,
+              decimals: 9,
               mintAuthority: '4kh6HxYZiAebF8HWLsUWod2EaQQ6iWHpHYCz8UcmFbM1',
               mint: 'BdhzpzhTD1MFqBiwNdrRy4jFo2FHFufw3n9e8sVjJczP',
             },
           },
-          { TAG: 'setComputeUnitLimit', data: { units: 6741n } },
+          { TAG: 'setComputeUnitLimit', data: { units: 6741 } },
         ],
         expHints: [
           'Create new account=BdhzpzhTD1MFqBiwNdrRy4jFo2FHFufw3n9e8sVjJczP with balance of 0.00251952 and owner program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb, using funding account 4kh6HxYZiAebF8HWLsUWod2EaQQ6iWHpHYCz8UcmFbM1',
@@ -946,7 +977,7 @@ describe('Solana', () => {
               tokenProgram: 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb',
             },
           },
-          { TAG: 'setComputeUnitLimit', data: { units: 19370n } },
+          { TAG: 'setComputeUnitLimit', data: { units: 19370 } },
         ],
         expHints: [
           'Initialize associated token account=5fmHWCRD1QvHqB4ZQP7PRWcoPR8nSNJyNaPF5iAzz13w with owner=2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk for token=2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH, payed by Ad5YH3AoPHXeHxxWt5uFTZHw9HFGKV9wDfQCV19wN4dH',
@@ -967,7 +998,7 @@ describe('Solana', () => {
             TAG: 'burnChecked',
             data: {
               amount: 1000000n,
-              decimals: 6n,
+              decimals: 6,
               account: 'EFPL5qtehMfDump11iGjgqjyfdFnY7qGk6gg4DdzxC6S',
               mint: '2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo',
               authority: '2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk',
@@ -1040,7 +1071,7 @@ describe('Solana', () => {
               tokenProgram: 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb',
             },
           },
-          { TAG: 'setComputeUnitLimit', data: { units: 19370n } },
+          { TAG: 'setComputeUnitLimit', data: { units: 19370 } },
         ],
         expHints: [
           'Initialize associated token account=5fmHWCRD1QvHqB4ZQP7PRWcoPR8nSNJyNaPF5iAzz13w with owner=2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk for token=2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH, payed by Ad5YH3AoPHXeHxxWt5uFTZHw9HFGKV9wDfQCV19wN4dH',
@@ -1105,6 +1136,9 @@ describe('Solana', () => {
       }
     }
     deepStrictEqual(count, { ok: 10, failed: 13 });
+  });
+  should('IDL type size', () => {
+    deepStrictEqual(sol.PROGRAMS.Token.token.accounts.coders.token.size, 165);
   });
 });
 
