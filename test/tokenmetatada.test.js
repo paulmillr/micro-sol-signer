@@ -36,7 +36,7 @@ describe('TokenMetadata', () => {
       })
     );
     deepStrictEqual(
-      TokenMetadata.tokenMetadata.accounts.coders.metadata.decode(metadata, {
+      TokenMetadata.tokenMetadata.program.accounts.coders.metadata.decode(metadata, {
         allowUnreadBytes: true,
       }),
       {
