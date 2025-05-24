@@ -299,7 +299,11 @@ t33.instructions.encoders.transferChecked({
 });
 
 let a3 = idl.defineIDL(TokenIDL);
-a3.associatedToken.pdas.associatedToken({ owner: '1', tokenProgram: '1', mint: '1' });
+a3.token.additionalPrograms.associatedToken.pdas.associatedToken({
+  owner: '1',
+  tokenProgram: '1',
+  mint: '1',
+});
 
 assertType<{
   mint: string;
