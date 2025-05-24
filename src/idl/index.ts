@@ -1183,16 +1183,24 @@ type IDL = {
 };
 
 type GetTypeIDL<T extends IDL> = {
-  [K in
-    | T['program']['name']
-    | T['additionalPrograms'][number]['name']]: K extends T['program']['name']
-    ? GetTypeProgram<T['program']>
-    : GetTypeProgram<Extract<T['additionalPrograms'][number], { name: K }>>;
+  [P in T['program']['name']]: {
+    program: GetTypeProgram<T['program']>;
+    additionalPrograms: {
+      [K in T['additionalPrograms'][number]['name']]: GetTypeProgram<
+        Extract<T['additionalPrograms'][number], { name: K }>
+      >;
+    };
+  };
 };
 
 export function defineIDL<T extends IDL>(idl: T): GetTypeIDL<T> {
-  const res: Record<string, any> = {};
-  res[idl.program.name] = defineProgram(idl.program);
-  for (const program of idl.additionalPrograms) res[program.name] = defineProgram(program);
+  const res: Record<string, any> = {
+    [idl.program.name]: {
+      program: defineProgram(idl.program),
+      additionalPrograms: {},
+    },
+  };
+  for (const program of idl.additionalPrograms)
+    res[idl.program.name].additionalPrograms[program.name] = defineProgram(program);
   return res as GetTypeIDL<T>;
 }

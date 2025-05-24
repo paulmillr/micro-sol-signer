@@ -315,48 +315,49 @@ export function AddressLookupTables(tables: Record<string, string[]>) {
 }
 
 export const PROGRAMS = {
-  System: idl.defineIDL(SystemIDL),
-  Token: idl.defineIDL(TokenIDL),
-  Token2022: idl.defineIDL(Token2022IDL),
-  ALT: idl.defineIDL(ALTIDL),
-  ComputeBudget: idl.defineIDL(ComputeBudgetIDL),
-  Config: idl.defineIDL(ConfigIDL),
-  Memo: idl.defineIDL(MemoIDL),
+  ...idl.defineIDL(SystemIDL),
+  ...idl.defineIDL(TokenIDL),
+  ...idl.defineIDL(Token2022IDL),
+  ...idl.defineIDL(ALTIDL),
+  ...idl.defineIDL(ComputeBudgetIDL),
+  ...idl.defineIDL(ConfigIDL),
+  ...idl.defineIDL(MemoIDL),
 };
 // Old API compat
-export const sys = PROGRAMS.System.system.instructions.encoders;
-export const token = PROGRAMS.Token.token.instructions.encoders;
+export const sys = PROGRAMS.system.program.instructions.encoders;
+export const token = PROGRAMS.token.program.instructions.encoders;
 // TODO: The inferred type of this node exceeds the maximum length the compiler will serialize. An explicit type annotation is needed.
-export const token2022 = PROGRAMS.Token2022['token-2022'].instructions.encoders as any;
-export const associatedToken = PROGRAMS.Token.associatedToken.instructions.encoders;
+export const token2022 = PROGRAMS['token-2022'].program.instructions.encoders as any;
+export const associatedToken =
+  PROGRAMS.token.additionalPrograms.associatedToken.instructions.encoders;
 
-export const SYS_PROGRAM = PROGRAMS.System.system.contract;
-export const TOKEN_PROGRAM = PROGRAMS.Token.token.contract;
-export const TOKEN_PROGRAM2022 = PROGRAMS.Token2022['token-2022'].contract;
-export const ASSOCIATED_TOKEN_PROGRAM = PROGRAMS.Token.associatedToken.contract;
+export const SYS_PROGRAM = PROGRAMS.system.program.contract;
+export const TOKEN_PROGRAM = PROGRAMS.token.program.contract;
+export const TOKEN_PROGRAM2022 = PROGRAMS['token-2022'].program.contract;
+export const ASSOCIATED_TOKEN_PROGRAM = PROGRAMS.token.additionalPrograms.associatedToken.contract;
 
-export const tokenAddress = PROGRAMS.Token.associatedToken.pdas.associatedToken;
-export const TokenAccount = PROGRAMS.Token.token.accounts.decoder;
-export const AddressTableLookupData = PROGRAMS.ALT.addressLookupTable.accounts.decoder;
+export const tokenAddress = PROGRAMS.token.additionalPrograms.associatedToken.pdas.associatedToken;
+export const TokenAccount = PROGRAMS.token.program.accounts.decoder;
+export const AddressTableLookupData = PROGRAMS.addressLookupTable.program.accounts.decoder;
 
 export const isOnCurve = idl.isOnCurve;
 export const programAddress = idl.programAddress;
 
 const TOKENS_ENCODE: Record<string, any> = {
-  [TOKEN_PROGRAM]: PROGRAMS.Token.token.instructions.encoders,
-  [TOKEN_PROGRAM2022]: PROGRAMS.Token2022['token-2022'].instructions.encoders,
+  [TOKEN_PROGRAM]: PROGRAMS.token.program.instructions.encoders,
+  [TOKEN_PROGRAM2022]: PROGRAMS['token-2022'].program.instructions.encoders,
 };
 
 const ACCOUNTS_DECODE: Record<string, any> = {
-  [SYS_PROGRAM]: PROGRAMS.System.system.accounts.decoder,
-  [TOKEN_PROGRAM]: PROGRAMS.Token.token.accounts.decoder,
-  [TOKEN_PROGRAM2022]: PROGRAMS.Token2022['token-2022'].accounts.decoder,
-  [ASSOCIATED_TOKEN_PROGRAM]: PROGRAMS.Token.associatedToken.accounts.decoder,
-  [PROGRAMS.ALT.addressLookupTable.contract]: PROGRAMS.ALT.addressLookupTable.accounts.decoder,
-  [PROGRAMS.ComputeBudget.computeBudget.contract]:
-    PROGRAMS.ComputeBudget.computeBudget.accounts.decoder,
-  [PROGRAMS.Config.solanaConfig.contract]: PROGRAMS.Config.solanaConfig.accounts.decoder,
-  [PROGRAMS.Memo.memo.contract]: PROGRAMS.Memo.memo.accounts.decoder,
+  [SYS_PROGRAM]: PROGRAMS.system.program.accounts.decoder,
+  [TOKEN_PROGRAM]: PROGRAMS.token.program.accounts.decoder,
+  [TOKEN_PROGRAM2022]: PROGRAMS['token-2022'].program.accounts.decoder,
+  [ASSOCIATED_TOKEN_PROGRAM]: PROGRAMS.token.additionalPrograms.associatedToken.accounts.decoder,
+  [PROGRAMS.addressLookupTable.program.contract]:
+    PROGRAMS.addressLookupTable.program.accounts.decoder,
+  [PROGRAMS.computeBudget.program.contract]: PROGRAMS.computeBudget.program.accounts.decoder,
+  [PROGRAMS.solanaConfig.program.contract]: PROGRAMS.solanaConfig.program.accounts.decoder,
+  [PROGRAMS.memo.program.contract]: PROGRAMS.memo.program.accounts.decoder,
 };
 export function decodeAccount(contract: string, data: Bytes): unknown {
   if (ACCOUNTS_DECODE[contract] === undefined) throw new Error('unknown contract');
@@ -364,15 +365,16 @@ export function decodeAccount(contract: string, data: Bytes): unknown {
 }
 
 const REGISTRY: Record<string, any> = {
-  [SYS_PROGRAM]: PROGRAMS.System.system.instructions.decoder,
-  [TOKEN_PROGRAM]: PROGRAMS.Token.token.instructions.decoder,
-  [TOKEN_PROGRAM2022]: PROGRAMS.Token2022['token-2022'].instructions.decoder,
-  [ASSOCIATED_TOKEN_PROGRAM]: PROGRAMS.Token.associatedToken.instructions.decoder,
-  [PROGRAMS.ALT.addressLookupTable.contract]: PROGRAMS.ALT.addressLookupTable.instructions.decoder,
-  [PROGRAMS.ComputeBudget.computeBudget.contract]:
-    PROGRAMS.ComputeBudget.computeBudget.instructions.decoder,
-  [PROGRAMS.Config.solanaConfig.contract]: PROGRAMS.Config.solanaConfig.instructions.decoder,
-  [PROGRAMS.Memo.memo.contract]: PROGRAMS.Memo.memo.instructions.decoder,
+  [SYS_PROGRAM]: PROGRAMS.system.program.instructions.decoder,
+  [TOKEN_PROGRAM]: PROGRAMS.token.program.instructions.decoder,
+  [TOKEN_PROGRAM2022]: PROGRAMS['token-2022'].program.instructions.decoder,
+  [ASSOCIATED_TOKEN_PROGRAM]:
+    PROGRAMS.token.additionalPrograms.associatedToken.instructions.decoder,
+  [PROGRAMS.addressLookupTable.program.contract]:
+    PROGRAMS.addressLookupTable.program.instructions.decoder,
+  [PROGRAMS.computeBudget.program.contract]: PROGRAMS.computeBudget.program.instructions.decoder,
+  [PROGRAMS.solanaConfig.program.contract]: PROGRAMS.solanaConfig.program.instructions.decoder,
+  [PROGRAMS.memo.program.contract]: PROGRAMS.memo.program.instructions.decoder,
 };
 export function parseInstruction(instruction: Instruction): unknown {
   if (REGISTRY[instruction.program] === undefined) throw new Error('unknown contract');
@@ -380,14 +382,14 @@ export function parseInstruction(instruction: Instruction): unknown {
 }
 
 export const CONTRACTS: Record<string, any> = {
-  [SYS_PROGRAM]: PROGRAMS.System.system,
-  [TOKEN_PROGRAM]: PROGRAMS.Token.token,
-  [TOKEN_PROGRAM2022]: PROGRAMS.Token2022['token-2022'],
-  [ASSOCIATED_TOKEN_PROGRAM]: PROGRAMS.Token.associatedToken,
-  [PROGRAMS.ALT.addressLookupTable.contract]: PROGRAMS.ALT.addressLookupTable,
-  [PROGRAMS.ComputeBudget.computeBudget.contract]: PROGRAMS.ComputeBudget.computeBudget,
-  [PROGRAMS.Config.solanaConfig.contract]: PROGRAMS.Config.solanaConfig,
-  [PROGRAMS.Memo.memo.contract]: PROGRAMS.Memo.memo,
+  [SYS_PROGRAM]: PROGRAMS.system.program,
+  [TOKEN_PROGRAM]: PROGRAMS.token.program,
+  [TOKEN_PROGRAM2022]: PROGRAMS['token-2022'].program,
+  [ASSOCIATED_TOKEN_PROGRAM]: PROGRAMS.token.additionalPrograms.associatedToken,
+  [PROGRAMS.addressLookupTable.program.contract]: PROGRAMS.addressLookupTable.program,
+  [PROGRAMS.computeBudget.program.contract]: PROGRAMS.computeBudget.program,
+  [PROGRAMS.solanaConfig.program.contract]: PROGRAMS.solanaConfig.program,
+  [PROGRAMS.memo.program.contract]: PROGRAMS.memo.program,
 };
 
 // Basic tx stuff

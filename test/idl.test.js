@@ -1137,8 +1137,11 @@ describe('Solana', () => {
     }
     deepStrictEqual(count, { ok: 10, failed: 13 });
   });
-  should('IDL type size', () => {
-    deepStrictEqual(sol.PROGRAMS.Token.token.accounts.coders.token.size, 165);
+  should('IDL type size (token)', () => {
+    deepStrictEqual(sol.PROGRAMS.token.program.accounts.coders.token.size, 165);
+  });
+  should('IDL type size (token-2022)', () => {
+    deepStrictEqual(sol.PROGRAMS['token-2022'].program.accounts.coders.token.size, 165);
   });
 });
 
