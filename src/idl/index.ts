@@ -1,6 +1,6 @@
 import { ed25519 } from '@noble/curves/ed25519';
-import { sha256 } from '@noble/hashes/sha2';
-import { concatBytes } from '@noble/hashes/utils';
+import { sha256 } from '@noble/hashes/sha2.js';
+import { concatBytes } from '@noble/hashes/utils.js';
 import { base16, base58, base64, utf8 } from '@scure/base';
 import * as P from 'micro-packed';
 import type { Instruction } from '../index.ts';

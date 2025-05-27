@@ -1,6 +1,6 @@
 import { deepStrictEqual, throws } from 'node:assert';
 import { describe, should } from 'micro-should';
-import { concatBytes } from '@noble/hashes/utils';
+import { concatBytes } from '@noble/hashes/utils.js';
 import { hex, base58, utf8, base64 } from '@scure/base';
 import * as sol from '../lib/esm/index.js';
 import * as idl from '../lib/esm/idl/index.js';

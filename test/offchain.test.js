@@ -1,4 +1,4 @@
-import { concatBytes } from '@noble/hashes/utils';
+import { concatBytes } from '@noble/hashes/utils.js';
 import { base58, hex, utf8 } from '@scure/base';
 import * as P from 'micro-packed';
 import { describe, should } from 'micro-should';
