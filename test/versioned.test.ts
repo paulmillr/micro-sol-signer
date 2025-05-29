@@ -1,7 +1,7 @@
-import { deepStrictEqual, throws } from 'node:assert';
-import { describe, should } from 'micro-should';
 import { base64 } from '@scure/base';
-import * as sol from '../lib/esm/index.js';
+import { describe, should } from 'micro-should';
+import { deepStrictEqual } from 'node:assert';
+import * as sol from '../src/index.ts';
 
 describe('Solana', () => {
   should('decode/encode V0 transactions (raw)', () => {

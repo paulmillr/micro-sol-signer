@@ -1,7 +1,8 @@
 node_modules
-/test/build/
-/lib
-/index.js
-/index.d.ts
-/index.d.ts.map
-/pack
+/esm
+*.d.ts
+*.d.ts.map
+*.js.map
+/*.js
+/idl
+/test/build

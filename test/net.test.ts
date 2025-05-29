@@ -1,8 +1,8 @@
 import * as mftch from 'micro-ftch';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual } from 'node:assert';
-import { COMMON_TOKENS } from '../lib/esm/hint.js';
-import { ArchiveNodeProvider, calcTransfersDiff, URL } from '../lib/esm/net.js';
+import { COMMON_TOKENS } from '../src/hint.ts';
+import { ArchiveNodeProvider, calcTransfersDiff, URL } from '../src/net.ts';
 import { default as NET_BASIC } from './vectors/net_basic.mjs';
 import { default as NET_TOKEN_VALID } from './vectors/net_token_valid.mjs';
 import { default as NET_TRANSFERS } from './vectors/net_transfers.mjs';

@@ -1,9 +1,9 @@
-import { deepStrictEqual, throws } from 'node:assert';
+import { base64, hex } from '@scure/base';
 import { describe, should } from 'micro-should';
-import { hex, base64 } from '@scure/base';
-import * as sol from '../lib/esm/index.js';
-import * as idl from '../lib/esm/idl/index.js';
-import { hintInstruction } from '../lib/esm/hint.js';
+import { deepStrictEqual } from 'node:assert';
+import { hintInstruction } from '../src/hint.ts';
+import * as idl from '../src/idl/index.ts';
+import * as sol from '../src/index.ts';
 
 describe('Solana', () => {
   describe('mapType', () => {

@@ -2,8 +2,8 @@ import { base64, hex } from '@scure/base';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual, throws } from 'node:assert';
 import fs from 'node:fs';
-import { hintInstruction } from '../lib/esm/hint.js';
-import * as sol from '../lib/esm/index.js';
+import { hintInstruction } from '../src/hint.ts';
+import * as sol from '../src/index.ts';
 
 const vectors = JSON.parse(fs.readFileSync(new URL('vectors-sol.json', import.meta.url)));
 

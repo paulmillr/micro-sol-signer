@@ -3,7 +3,7 @@ import { base58, hex, utf8 } from '@scure/base';
 import * as P from 'micro-packed';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual } from 'node:assert';
-import * as sol from '../lib/esm/index.js';
+import * as sol from '../src/index.ts';
 
 // This is compatible with solana-cli sign-offchain-message
 // https://docs.anza.xyz/cli/examples/sign-offchain-message/
