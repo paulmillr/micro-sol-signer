@@ -10,6 +10,8 @@ Create, sign & decode Solana transactions with minimum deps.
 
 _Check out all web3 utility libraries:_ [ETH](https://github.com/paulmillr/micro-eth-signer), [BTC](https://github.com/paulmillr/scure-btc-signer), [SOL](https://github.com/paulmillr/micro-sol-signer), [tx-tor-broadcaster](https://github.com/paulmillr/tx-tor-broadcaster)
 
+**Warning** "solsigner" token is an unrelated scam.
+
 ## Usage
 
 > `npm install micro-sol-signer`
