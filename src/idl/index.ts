@@ -77,7 +77,7 @@ export const shortU16 = P.wrap({
 
 export const pubKey = b58();
 
-function mod(a: bigint, b: bigint = ed25519.CURVE.Fp.ORDER) {
+function mod(a: bigint, b: bigint = ed25519.Point.Fp.ORDER) {
   const res = a % b;
   return res >= 0n ? res : b + res;
 }
@@ -92,7 +92,7 @@ export function isOnCurve(bytes: Bytes | string) {
     const normed = Uint8Array.from(Array.from(bytes.slice(0, 31)).concat(normedLast));
     const modBytes = P.U256LE.encode(mod(P.U256LE.decode(normed)));
     if ((last & 0x80) !== 0) modBytes[31] |= 0x80;
-    ed25519.ExtendedPoint.fromHex(modBytes);
+    ed25519.Point.fromBytes(modBytes);
     return true;
   } catch (e) {
     return false;
