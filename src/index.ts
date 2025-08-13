@@ -408,7 +408,7 @@ export function verifyTx(tx: TxData) {
   }
 }
 
-export function getPublicKey(privateKey: Bytes) {
+export function getPublicKey(privateKey: Bytes): Bytes {
   return ed25519.getPublicKey(privateKey);
 }
 
@@ -442,7 +442,7 @@ export function formatPublic(publicKey: Bytes) {
   return base58.encode(publicKey);
 }
 
-export function parseAddress(address: string) {
+export function parseAddress(address: string): Bytes {
   return base58.decode(address);
 }
 
