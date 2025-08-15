@@ -16,7 +16,6 @@
   },
   "scripts": {
     "build": "tsc",
-    "lint": "prettier --check index.ts",
     "test": "node test/index.js"
   },
   "dependencies": {

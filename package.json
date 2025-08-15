@@ -28,7 +28,6 @@
     "build": "npm run build:clean && tsc",
     "build:clean": "rm *.{js,d.ts,js.map,d.ts.map}; rm -rf {idl}",
     "build:release": "npx --no @paulmillr/jsbt esbuild test/build",
-    "lint": "prettier --check src",
     "format": "prettier --write src",
     "test": "node --experimental-strip-types --no-warnings test/index.ts",
     "test:bun": "bun test/index.ts",
