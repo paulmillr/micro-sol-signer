@@ -104,7 +104,7 @@ export function programAddress(program: string, ...seeds: Bytes[]) {
   const noncePos = seed.length;
   seed = P.utils.concatBytes(
     seed,
-    new Uint8Array([0]),
+    Uint8Array.of(0),
     base58.decode(program),
     utf8.decode('ProgramDerivedAddress')
   );
