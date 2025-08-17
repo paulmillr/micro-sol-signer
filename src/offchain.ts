@@ -1,4 +1,4 @@
-import { ed25519 } from '@noble/curves/ed25519';
+import { ed25519 } from '@noble/curves/ed25519.js';
 import { base58, utf8 } from '@scure/base';
 import * as P from 'micro-packed';
 

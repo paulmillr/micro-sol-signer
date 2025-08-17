@@ -1,9 +1,7 @@
-import { deepStrictEqual, throws } from 'node:assert';
+import { base58, base64, utf8 } from '@scure/base';
 import { describe, should } from 'micro-should';
-import { concatBytes } from '@noble/hashes/utils';
-import { hex, base58, utf8, base64 } from '@scure/base';
-import * as sol from '../lib/esm/index.js';
-import * as idl from '../lib/esm/idl/index.js';
+import { deepStrictEqual, throws } from 'node:assert';
+import * as idl from '../src/idl/index.ts';
 // import fs from 'node:fs';
 // import { createFromRoot } from 'codama';
 // import { rootNodeFromAnchor } from '@codama/nodes-from-anchor';

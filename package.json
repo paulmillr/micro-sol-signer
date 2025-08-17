@@ -3,61 +3,36 @@
   "version": "0.7.0",
   "description": "Create, sign & decode Solana transactions with minimum deps",
   "files": [
-    "lib",
+    "*.js",
+    "*.d.ts",
+    "*.map",
+    "idl",
     "src"
   ],
-  "main": "lib/index.js",
-  "module": "lib/esm/index.js",
-  "types": "lib/index.d.ts",
-  "exports": {
-    ".": {
-      "import": "./lib/esm/index.js",
-      "require": "./lib/index.js"
-    },
-    "./hint.js": {
-      "import": "./lib/esm/hint.js",
-      "require": "./lib/hint.js"
-    },
-    "./net.js": {
-      "import": "./lib/esm/net.js",
-      "require": "./lib/net.js"
-    },
-    "./idl.js": {
-      "import": "./lib/esm/idl/index.js",
-      "require": "./lib/idl/index.js"
-    }
-  },
   "dependencies": {
-    "@noble/curves": "^1.9.0",
-    "@noble/hashes": "^1.8.0",
-    "@scure/base": "^1.2.5",
-    "micro-packed": "~0.7.3"
+    "@noble/curves": "2.0.0-beta.2",
+    "@noble/hashes": "2.0.0-beta.4",
+    "@scure/base": "2.0.0-beta.1",
+    "micro-packed": "~0.8.0-beta.1"
   },
   "devDependencies": {
-    "@paulmillr/jsbt": "0.4.0",
-    "micro-bmark": "0.4.1",
+    "@paulmillr/jsbt": "0.4.2",
+    "@types/node": "24.2.1",
+    "micro-bmark": "0.4.2",
     "micro-ftch": "0.4.3",
     "micro-should": "0.5.3",
-    "prettier": "3.5.3",
-    "typescript": "5.8.3"
-  },
-  "author": "Paul Miller (https://paulmillr.com)",
-  "license": "MIT",
-  "homepage": "https://github.com/paulmillr/micro-sol-signer",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/paulmillr/micro-sol-signer.git"
+    "prettier": "3.6.2",
+    "typescript": "5.9.2"
   },
   "scripts": {
-    "build": "tsc && tsc -p tsconfig.cjs.json",
-    "build:release": "npx jsbt esbuild test/build",
-    "lint": "prettier --check src",
+    "build": "tsc",
+    "build:clean": "rm -f *.{js,d.ts,js.map,d.ts,d.ts.map}; rm -rf idl",
+    "build:release": "npx --no @paulmillr/jsbt esbuild test/build",
     "format": "prettier --write src",
-    "test": "node test/index.js",
-    "test:bun": "bun test/index.js",
-    "test:deno": "deno --allow-env --allow-read test/index.js"
+    "test": "node --experimental-strip-types --no-warnings test/index.ts",
+    "test:bun": "bun test/index.ts",
+    "test:deno": "deno --allow-env --allow-read test/index.ts"
   },
-  "sideEffects": false,
   "keywords": [
     "solana",
     "sol",
@@ -69,5 +44,15 @@
     "address",
     "token"
   ],
-  "funding": "https://paulmillr.com/funding/"
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/paulmillr/micro-sol-signer.git"
+  },
+  "type": "module",
+  "main": "index.js",
+  "module": "index.js",
+  "types": "index.d.ts",
+  "sideEffects": false,
+  "author": "Paul Miller (https://paulmillr.com)",
+  "license": "MIT"
 }

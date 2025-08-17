@@ -2,8 +2,8 @@ import { base64, hex } from '@scure/base';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual, throws } from 'node:assert';
 import fs from 'node:fs';
-import { hintInstruction } from '../lib/esm/hint.js';
-import * as sol from '../lib/esm/index.js';
+import { hintInstruction } from '../src/hint.ts';
+import * as sol from '../src/index.ts';
 
 const vectors = JSON.parse(fs.readFileSync(new URL('vectors-sol.json', import.meta.url)));
 
@@ -497,7 +497,7 @@ describe('Solana', () => {
     );
   });
   should('programAddress', () => {
-    let p = sol.programAddress('BPFLoader1111111111111111111111111111111111', new Uint8Array([]));
+    let p = sol.programAddress('BPFLoader1111111111111111111111111111111111', Uint8Array.of());
     deepStrictEqual(p, 'EXWkUCz3YJU9TDVk39ogA4TwoVsUi75ZDhH6yT7acPgQ');
   });
   should('tokenAddress', () => {
@@ -869,7 +869,7 @@ describe('Solana', () => {
           { address: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', sign: false, write: false },
           //       { address: 'SysvarRent111111111111111111111111111111111', sign: false, write: false },
         ],
-        data: new Uint8Array([0]),
+        data: Uint8Array.of(0),
       });
       deepStrictEqual(
         sol.parseInstruction(t, {
@@ -892,7 +892,7 @@ describe('Solana', () => {
         'Initialize associated token account=DShWnroshVbeUp28oopA3Pu7oFPDBtC1DBmPECXXAQ9n with owner=Hozo7TadHq6PMMiGLGNvgk79Hvj5VTAM7Ny2bamQ2m8q for token=USDT, payed by 3ECJhLBQ9DAuKBKNjQGLEk3YqoFcF1YvhdayQ2C96eXF'
       );
       // Unknown token!
-      deepStrictEqual(sol.parseInstruction({ ...t, data: new Uint8Array([0]) }, {}), {
+      deepStrictEqual(sol.parseInstruction({ ...t, data: Uint8Array.of(0) }, {}), {
         TAG: 'createAssociatedToken',
         data: {
           payer: '3ECJhLBQ9DAuKBKNjQGLEk3YqoFcF1YvhdayQ2C96eXF',
@@ -902,7 +902,7 @@ describe('Solana', () => {
         },
       });
       deepStrictEqual(
-        hintInstruction({ ...t, data: new Uint8Array([0]) }, {}),
+        hintInstruction({ ...t, data: Uint8Array.of(0) }, {}),
         'Initialize associated token account=DShWnroshVbeUp28oopA3Pu7oFPDBtC1DBmPECXXAQ9n with owner=Hozo7TadHq6PMMiGLGNvgk79Hvj5VTAM7Ny2bamQ2m8q for token=7o36UsWR1JQLpZ9PE2gn9L4SQ69CNNiWAXd4Jt7rqz9Z, payed by 3ECJhLBQ9DAuKBKNjQGLEk3YqoFcF1YvhdayQ2C96eXF'
       );
     });

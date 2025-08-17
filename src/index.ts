@@ -1,4 +1,4 @@
-import { ed25519 } from '@noble/curves/ed25519';
+import { ed25519 } from '@noble/curves/ed25519.js';
 import { base58, base64, hex } from '@scure/base';
 import * as P from 'micro-packed';
 import * as idl from './idl/index.ts';
@@ -408,7 +408,7 @@ export function verifyTx(tx: TxData) {
   }
 }
 
-export function getPublicKey(privateKey: Bytes) {
+export function getPublicKey(privateKey: Bytes): Bytes {
   return ed25519.getPublicKey(privateKey);
 }
 
@@ -442,7 +442,7 @@ export function formatPublic(publicKey: Bytes) {
   return base58.encode(publicKey);
 }
 
-export function parseAddress(address: string) {
+export function parseAddress(address: string): Bytes {
   return base58.decode(address);
 }
 

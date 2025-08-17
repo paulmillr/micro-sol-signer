@@ -10,6 +10,8 @@ Create, sign & decode Solana transactions with minimum deps.
 
 _Check out all web3 utility libraries:_ [ETH](https://github.com/paulmillr/micro-eth-signer), [BTC](https://github.com/paulmillr/scure-btc-signer), [SOL](https://github.com/paulmillr/micro-sol-signer), [tx-tor-broadcaster](https://github.com/paulmillr/tx-tor-broadcaster)
 
+**Warning** "solsigner" token is an unrelated scam.
+
 ## Usage
 
 > `npm install micro-sol-signer`
@@ -30,12 +32,12 @@ function parseInstruction(instruction: Instruction): unknown;
 const CONTRACTS: Record<string, any>;
 type TxData = Bytes | string;
 function verifyTx(tx: TxData): void;
-function getPublicKey(privateKey: Bytes): Uint8Array<ArrayBufferLike>;
+function getPublicKey(privateKey: Bytes): Uint8Array;
 function getAddress(privateKey: Bytes): string;
 type PrivateKeyFormat = 'base58' | 'hex' | 'array';
 function formatPrivate(privateKey: Bytes, format?: PrivateKeyFormat): string | number[];
 function formatPublic(publicKey: Bytes): string;
-function parseAddress(address: string): Uint8Array<ArrayBufferLike>;
+function parseAddress(address: string): Uint8Array;
 function createTx(address: string, instructions: Instruction[], blockhash: string, version?: Version): string;
 function createTransferSol(from: string, to: string, amount: bigint, blockhash: string, version?: Version): string;
 function createTokenTransfer(mint: string, from: string, to: string, amount: bigint, blockhash: string, tokenProgram?: string, version?: Version): string;
