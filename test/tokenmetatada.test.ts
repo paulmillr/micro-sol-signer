@@ -1,5 +1,5 @@
+import { describe, should } from '@paulmillr/jsbt/test.js';
 import { base58, base64, utf8 } from '@scure/base';
-import { describe, should } from 'micro-should';
 import { deepStrictEqual, throws } from 'node:assert';
 import * as idl from '../src/idl/index.ts';
 // import fs from 'node:fs';

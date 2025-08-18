@@ -1,7 +1,7 @@
 import { concatBytes } from '@noble/hashes/utils.js';
+import { describe, should } from '@paulmillr/jsbt/test.js';
 import { base58, hex, utf8 } from '@scure/base';
 import * as P from 'micro-packed';
-import { describe, should } from 'micro-should';
 import { deepStrictEqual } from 'node:assert';
 import * as sol from '../src/index.ts';
 

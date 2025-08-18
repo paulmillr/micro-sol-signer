@@ -1,5 +1,5 @@
+import { describe, should } from '@paulmillr/jsbt/test.js';
 import { base64, hex } from '@scure/base';
-import { describe, should } from 'micro-should';
 import { deepStrictEqual } from 'node:assert';
 import { hintInstruction } from '../src/hint.ts';
 import * as idl from '../src/idl/index.ts';

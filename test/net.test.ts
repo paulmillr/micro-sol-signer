@@ -1,5 +1,5 @@
+import { describe, should } from '@paulmillr/jsbt/test.js';
 import * as mftch from 'micro-ftch';
-import { describe, should } from 'micro-should';
 import { deepStrictEqual } from 'node:assert';
 import { COMMON_TOKENS } from '../src/hint.ts';
 import { ArchiveNodeProvider, calcTransfersDiff, URL } from '../src/net.ts';
