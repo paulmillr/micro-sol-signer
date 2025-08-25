@@ -1,6 +1,6 @@
 {
   "name": "@paulmillr/micro-sol-signer",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "exports": {
     ".": "./src/index.ts",
     "./hint.js": "./src/hint.ts",
@@ -9,10 +9,10 @@
     "./idl.js": "./src/idl/index.ts"
   },
   "imports": {
-    "@noble/curves": "jsr:@noble/curves@^2.0.0-beta.2",
-    "@noble/hashes": "jsr:@noble/hashes@^2.0.0-beta.4",
-    "@scure/base": "jsr:@scure/base@^2.0.0-beta.1",
-    "micro-packed": "jsr:@paulmillr/micro-packed@~0.8.0-beta.1"
+    "@noble/curves": "jsr:@noble/curves@^2.0.0",
+    "@noble/hashes": "jsr:@noble/hashes@^2.0.0",
+    "@scure/base": "jsr:@scure/base@^2.0.0",
+    "micro-packed": "jsr:@paulmillr/micro-packed@^0.8.0"
   },
   "publish": {
     "include": [
