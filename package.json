@@ -31,6 +31,13 @@
     "test:bun": "bun test/index.ts",
     "test:deno": "deno --allow-env --allow-read test/index.ts"
   },
+  "exports": {
+    ".": "./index.js",
+    "./hint.js": "./hint.js",
+    "./net.js": "./net.js",
+    "./offchain.js": "./offchain.js",
+    "./idl.js": "./idl/index.js"
+  },
   "keywords": [
     "solana",
     "sol",
