@@ -1,6 +1,6 @@
 import { describe, should } from '@paulmillr/jsbt/test.js';
 import * as mftch from 'micro-ftch';
-import { deepStrictEqual } from 'node:assert';
+import { deepStrictEqual, rejects, throws } from 'node:assert';
 import { COMMON_TOKENS } from '../src/hint.ts';
 import { ArchiveNodeProvider, calcTransfersDiff, URL } from '../src/net.ts';
 import { default as NET_BASIC } from './vectors/net_basic.mjs';
@@ -10,6 +10,21 @@ import { default as NET_TRANSFERS } from './vectors/net_transfers.mjs';
 const getKey = (url, opt) => JSON.stringify({ url: 'https://NODE_URL/', opt });
 
 describe('Net', () => {
+  should('validators', async () => {
+    const archive = new ArchiveNodeProvider({
+      call: async () => ({ value: undefined, context: { slot: 0 } }),
+    });
+    throws(() => archive.minBalance('1000' as any), TypeError);
+    throws(() => archive.minBalance(-1), RangeError);
+    throws(() => archive.minBalance(1.5), RangeError);
+    await rejects(archive.accountInfo(1 as any), TypeError);
+    await rejects(archive.unspent(1 as any), TypeError);
+    await rejects(archive.tokenBalances(1 as any, COMMON_TOKENS), TypeError);
+    await rejects(archive.transfers(1 as any), TypeError);
+    await rejects(archive.transfers('11111111111111111111111111111111', '20' as any), TypeError);
+    await rejects(archive.transfers('11111111111111111111111111111111', 0), RangeError);
+    await rejects(archive.transfers('11111111111111111111111111111111', 1.5), RangeError);
+  });
   should('Basic', async () => {
     const addr = 'EqywLUZcm73PSWri93X3M5TN62iFMsUPMjvWYUq89dKB'; // some account from tests
     const addr2 = '6y6nyKZKU3kuhSHdGT9YQ63DSj2tWoqKB8xui2cofqqj'; // non existent account

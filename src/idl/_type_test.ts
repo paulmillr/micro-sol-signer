@@ -1,5 +1,6 @@
 import * as P from 'micro-packed';
 import * as idl from './index.ts';
+import * as sol from '../index.ts';
 import TokenIDL from './token.ts';
 
 // Basic
@@ -297,6 +298,14 @@ t33.instructions.encoders.transferChecked({
   amount: 123n,
   decimals: 10,
 });
+sol.createTokenTransferChecked(
+  'So11111111111111111111111111111111111111112',
+  '11111111111111111111111111111111',
+  'FDwkzWGxx6LfCfzcmVVLEk3QUMxNhuFuKEMRwzR4Dtys',
+  123n,
+  4,
+  'J2BjKU6L83eehHVgoze6uTXGCBu6nbxsqEro9QvWpU52'
+);
 
 let a3 = idl.defineIDL(TokenIDL);
 a3.token.additionalPrograms.associatedToken.pdas.associatedToken({

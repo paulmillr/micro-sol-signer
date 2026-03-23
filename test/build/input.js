@@ -1,1 +1,1 @@
-export * from 'lib';
+export * from 'micro-sol-signer';

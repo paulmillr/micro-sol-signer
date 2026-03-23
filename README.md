@@ -22,26 +22,34 @@ _Check out all web3 utility libraries:_ [ETH](https://github.com/paulmillr/micro
 import * as sol from 'micro-sol-signer';
 ```
 
-Method summary:
+Main public helpers:
 
-```ts
-const isOnCurve: typeof idl.isOnCurve;
-const programAddress: typeof idl.programAddress;
+```text
+type Bytes = Uint8Array;
+type Instruction = {
+  program: string;
+  keys: { address: string; sign: boolean; write: boolean }[];
+  data: Bytes;
+};
+type Version = number | 'legacy';
+type TxData = Bytes | string;
+type PrivateKeyFormat = 'base58' | 'hex' | 'array';
+
+function isOnCurve(bytes: string | Bytes): boolean;
+function programAddress(program: string, ...seeds: Bytes[]): string;
 function decodeAccount(contract: string, data: Bytes): unknown;
 function parseInstruction(instruction: Instruction): unknown;
 const CONTRACTS: Record<string, any>;
-type TxData = Bytes | string;
-function verifyTx(tx: TxData): void;
+function verifyTx(tx: Bytes | string): void;
 function getPublicKey(privateKey: Bytes): Uint8Array;
 function getAddress(privateKey: Bytes): string;
-type PrivateKeyFormat = 'base58' | 'hex' | 'array';
 function formatPrivate(privateKey: Bytes, format?: PrivateKeyFormat): string | number[];
 function formatPublic(publicKey: Bytes): string;
 function parseAddress(address: string): Uint8Array;
 function createTx(address: string, instructions: Instruction[], blockhash: string, version?: Version): string;
 function createTransferSol(from: string, to: string, amount: bigint, blockhash: string, version?: Version): string;
 function createTokenTransfer(mint: string, from: string, to: string, amount: bigint, blockhash: string, tokenProgram?: string, version?: Version): string;
-function createTokenTransferChecked(mint: string, from: string, to: string, amount: bigint, decimals: bigint, blockhash: string, tokenProgram?: string, version?: Version): string;
+function createTokenTransferChecked(mint: string, from: string, to: string, amount: bigint, decimals: number, blockhash: string, tokenProgram?: string, version?: Version): string;
 function signTx(privateKey: Bytes, data: TxData): [string, string];
 ```
 
@@ -56,6 +64,8 @@ There are other variables such as `SYS_PROGRAM`, which are also exported. Specif
 ### Create and sign simple transaction
 
 ```js
+import * as sol from 'micro-sol-signer';
+
 // 11111111... private key
 const privKey = new Uint8Array(32).fill(0x01);
 // Get address of private key
@@ -70,8 +80,7 @@ const privFormatted = sol.formatPrivate(privKey);
 const toAddress = 'FDwkzWGxx6LfCfzcmVVLEk3QUMxNhuFuKEMRwzR4Dtys';
 const blockhash = 'J2BjKU6L83eehHVgoze6uTXGCBu6nbxsqEro9QvWpU52';
 const amount = '10.1';
-const fee = '1.2';
-const tx0 = sol.createTx(address, toAddress, amount, fee, blockhash);
+const tx0 = sol.createTransferSol(address, toAddress, sol.Decimal.decode(amount), blockhash);
 // AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAEDiojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1zTVICVf7+to6zQ/+XautpF+KSSoZ7ESTxv3rg8xPqyXgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/ORj/WtXHGLCh9wC0eGkf26qTFR5x3nCqwXXmoVtZb0BAgIAAQwCAAAAAMUBWgIAAAA=
 const [txHash0, signedTx0] = sol.signTx(privKey, tx0);
 /*
@@ -158,29 +167,38 @@ Solana is very flexible and has awesome architecture, but it also means there is
 
 The basic token sending example is:
 
-```js
+```ts
+import * as P from 'micro-packed';
+import * as sol from 'micro-sol-signer';
+import { COMMON_TOKENS, tokenFromSymbol } from 'micro-sol-signer/hint.js';
+
 // Current blockhash
 const blockhash = '9xp5Jz2v7ZsE3Xn5SVGkRisjo7h16vzF1ducwhWnc5n9';
 // Sol account which is owner of tokenAccount
 const fromAccount = 'EqywLUZcm73PSWri93X3M5TN62iFMsUPMjvWYUq89dKB';
 
-const USDT = sol.tokenFromSymbol('USDT', {
-  ...sol.COMMON_TOKENS,
+const USDT = tokenFromSymbol('USDT', {
+  ...COMMON_TOKENS,
   // You can add custom tokens here
 });
+if (!USDT) throw new Error('USDT metadata missing');
 // Deriving token account address from solana account address
-const fromTokenAccount = sol.tokenAddress(USDT.contract, fromAccount);
+const fromTokenAccount = sol.tokenAddress({
+  mint: USDT.contract,
+  owner: fromAccount,
+  tokenProgram: sol.TOKEN_PROGRAM,
+});
 
 // Should be valid token account, not solana account
 const toTokenAddress = 'FDwkzWGxx6LfCfzcmVVLEk3QUMxNhuFuKEMRwzR4Dtys';
 
 const amount = '64487.8509';
-const tokenSimple = sol.createTxComplex(
+const tokenSimple = sol.createTx(
   fromAccount, // owner of source token account (solana account)
   [
     sol.token.transferChecked({
       source: fromTokenAccount, // Source token account (not solana account)
-      amount: sol.parseDecimal(amount, USDT.decimals),
+      amount: P.coders.decimal(USDT.decimals).decode(amount),
       decimals: USDT.decimals, // decimals of value
       mint: USDT.contract, // token contract address
       authority: fromAccount, // owner of source token account (solana account)
@@ -198,6 +216,10 @@ console.log(tokenSimple);
 However, in real world you may need more complex logic, like:
 
 ```js
+import { base64 } from '@scure/base';
+import * as P from 'micro-packed';
+import * as sol from 'micro-sol-signer';
+
 // Check if account is valid token account
 function isValidTokenAccount(mint, info, owner) {
   if (!info) return false;
@@ -242,11 +264,15 @@ async function createTx(
   blockhash // current block hash
 ) {
   // Derive token account from 'from' address
-  const fromTokenAccount = sol.tokenAddress(tokenContract, fromAccount);
+  const fromTokenAccount = sol.tokenAddress({
+    mint: tokenContract,
+    owner: fromAddress,
+    tokenProgram: sol.TOKEN_PROGRAM,
+  });
   // Common token options
   const tokenOpt = {
     source: fromTokenAccount,
-    amount: sol.parseDecimal(amount, decimals),
+    amount: P.coders.decimal(decimals).decode(amount),
     decimals,
     mint: tokenContract,
     authority: fromAddress, // owner of source
@@ -254,7 +280,11 @@ async function createTx(
   // If address is on curve, it is probably not 'associated token contract'
   if (sol.isOnCurve(toAddress)) {
     // Derive token account from solana account
-    const toTokenAddress = sol.tokenAddress(tokenContract, toAddress);
+    const toTokenAddress = sol.tokenAddress({
+      mint: tokenContract,
+      owner: toAddress,
+      tokenProgram: sol.TOKEN_PROGRAM,
+    });
     const [addrInfo, assocInfo] = await Promise.all([
       solAccountInfo(toAddress),
       solAccountInfo(toTokenAddress),
@@ -262,7 +292,7 @@ async function createTx(
     // toTokenAddress -- is valid token account, we can send here
     if (isValidTokenAccount(tokenContract, assocInfo, toAddress)) {
       // Associted account is ok, send to toTokenAddress
-      return sol.createTxComplex(
+      return sol.createTx(
         fromAddress,
         [sol.token.transferChecked({ ...tokenOpt, destination: toTokenAddress })],
         blockhash
@@ -270,7 +300,7 @@ async function createTx(
       // toTokenAddress is not valid token account, but toAddress is (even if it is on-curve)
     } else if (isValidTokenAccount(tokenContract, addrInfo)) {
       // account is actually token account, send to address. But since we don't know
-      return sol.createTxComplex(
+      return sol.createTx(
         fromAddress,
         [sol.token.transferChecked({ ...tokenOpt, destination: toAddress })],
         blockhash
@@ -279,7 +309,7 @@ async function createTx(
       // token account for it
     } else if (addrInfo && addrInfo.owner === sol.SYS_PROGRAM) {
       // try to create assoc address and send tokens to it
-      return sol.createTxComplex(
+      return sol.createTx(
         fromAddress,
         [
           sol.associatedToken.create({
@@ -295,7 +325,7 @@ async function createTx(
     } else {
       // We probably can create associated account here, even if account doesn't exists, but it is probably typo and funds will be lost
       throw new Error(
-        `SOL.createTx: invalid token destination address, account=${toAddress} doesn't exists, associated=${assocAddress} doesn't exists`
+        `SOL.createTx: invalid token destination address, account=${toAddress} doesn't exists, associated=${toTokenAddress} doesn't exists`
       );
     }
   } else {
@@ -307,7 +337,7 @@ async function createTx(
         `SOL.createTx: invalid token destination address=${toAddress}, off-curve and invalid`
       );
     // Valid token addr, send to it. Send to address
-    return sol.createTxComplex(
+    return sol.createTx(
       fromAddress,
       [sol.token.transferChecked({ ...tokenOpt, destination: toAddress })],
       blockhash

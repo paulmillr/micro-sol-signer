@@ -1,26 +1,51 @@
 import { base58, base64 } from '@scure/base';
 import type { TokenInfo } from './hint.ts';
-import * as sol from './index.ts';
+import {
+  AddressTableLookupData,
+  PRECISION,
+  TOKEN_PROGRAM,
+  TokenAccount,
+  TransactionRaw,
+  verifyTx,
+} from './index.ts';
 
 // These seem official, but trigger rate-limit easily.
 // Paid one starts from $500, self-hosted will require 100+ TBs of storage.
+/** Default Solana mainnet RPC URL. */
 export const URL = 'https://api.mainnet-beta.solana.com';
+/** Default Solana devnet RPC URL. */
 export const TESTNET_URL = 'https://api.devnet.solana.com';
 
+/** Minimal JSON-RPC transport used by the archive provider. */
 export type JsonrpcInterface = {
+  /**
+   * Performs one JSON-RPC request.
+   * @param method - JSON-RPC method name.
+   * @param args - Positional JSON-RPC params.
+   * @returns Raw JSON-RPC result payload.
+   */
   call: (method: string, ...args: any[]) => Promise<any>;
 };
 
+/** Basic account data returned from RPC. */
 export type AccountInfo = {
+  /** Lamport balance of the account. */
   lamports: bigint;
+  /** Owning program address. */
   owner: string;
+  /** Rent epoch from RPC. */
   rentEpoch: number;
+  /** Raw account data bytes. */
   data: Uint8Array;
+  /** Whether the account is executable. */
   exec: boolean;
 };
 
+/** Recent blockhash response with fee information. */
 export type RecentBlockhash = {
+  /** Recent blockhash string. */
   blockhash: string;
+  /** Fee calculator returned by RPC. */
   feeCalculator: { lamportsPerSignature: number };
 };
 
@@ -112,44 +137,79 @@ type RawTxInfo = {
   transaction: Data;
 };
 
+/** Token balance info for a wallet-owned token account. */
 export type TokenBalance = Partial<TokenInfo> & {
+  /** Mint address. */
   contract: string; // This is actual 'mint', but for compat with eth-signer lets call it contract (same thing)
+  /** Mint precision in decimal places. */
   decimals: number;
+  /** Raw token amount. */
   balance: bigint;
+  /** Token-account address holding the balance. */
   tokenAccount: string;
 };
 
+/** Native SOL balance state used for new transactions. */
 export type Unspent = {
+  /** Native symbol. Always `SOL`. */
   symbol: 'SOL';
+  /** Native SOL precision. */
   decimals: number;
+  /** Current lamport balance. */
   balance: bigint;
+  /** Recent blockhash to use for a new transaction. */
   blockhash: string;
   // Useful for wallets to know if there are transactions related to wallet
   // Note: even if nonce is zero, there can be transfers to wallet
   // can be used to check before fetching all transactions
+  /** Whether the address has an on-chain account yet. */
   active: boolean;
 };
 
-export type Transfer = { from?: string; to?: string; value: bigint };
+/** One native SOL transfer delta. */
+export type Transfer = {
+  /** Source address when lamports left an account. */
+  from?: string;
+  /** Destination address when lamports reached an account. */
+  to?: string;
+  /** Lamport delta. */
+  value: bigint;
+};
+/** One SPL token transfer delta. */
 export type TokenTransfer = Transfer & {
+  /** Token-account address that moved the tokens. */
   tokenAccount?: string;
+  /** Token mint address. */
   contract: string;
+  /** Owner of the token account when known. */
   owner?: string; // owner of token account
+  /** Mint precision in decimal places. */
   decimals: number;
 };
 
 // The most relevant info about a tx for wallets
+/** Wallet-oriented transaction summary. */
 export type TxTransfers = {
-  hash: string; // this called 'signature' internally
+  /** Transaction signature hash. */
+  hash: string;
+  /** Block time in UNIX milliseconds. */
   timestamp?: number;
+  /** Slot height. */
   block?: number;
+  /** Native SOL transfer deltas. */
   transfers: Transfer[];
+  /** SPL token transfer deltas. */
   tokenTransfers: TokenTransfer[];
+  /** Whether the transaction reverted on chain. */
   reverted: boolean;
   // This contains everything about tx in raw format
+  /** Raw transaction bytes, logs, and network fee for deeper debugging. */
   info: {
+    /** Raw base64 transaction bytes. */
     raw: string;
+    /** Runtime log messages. */
     log: string[];
+    /** Network fee in lamports. */
     fee: bigint;
   };
 };
@@ -176,6 +236,19 @@ function decodeData(data: Data) {
   throw new Error('unsupported encoding');
 }
 
+/**
+ * High-level Solana RPC wrapper for balances, transfers, and transaction helpers.
+ * @param rpc - JSON-RPC transport implementation.
+ * @example
+ * Wrap the JSON-RPC transport once, then use the helper for higher-level account queries.
+ * ```ts
+ * import * as mftch from 'micro-ftch';
+ * import { ArchiveNodeProvider, URL } from 'micro-sol-signer/net.js';
+ * const ftch = mftch.ftch(fetch, { concurrencyLimit: 1 });
+ * const archive = new ArchiveNodeProvider(mftch.jsonrpc(ftch, URL, { batchSize: 5 }));
+ * await archive.accountInfo('11111111111111111111111111111111');
+ * ```
+ */
 export class ArchiveNodeProvider {
   private rpc: JsonrpcInterface;
   constructor(rpc: JsonrpcInterface) {
@@ -197,19 +270,20 @@ export class ArchiveNodeProvider {
   }
   /**
    * Requests airdrop SOL for tests (testnet)
-   * @param to - Solana address
-   * @param amount - Lamports amount
-   * @returns
+   * @param to - Solana address.
+   * @param amount - Lamport amount.
+   * @returns RPC airdrop result.
    */
   airdrop(to: string, amount: bigint): Promise<any> {
     return this.base64Call('requestAirdrop', to, Number(amount));
   }
   /**
    * Returns all information associated with the account of provided address
-   * @param address
+   * @param address - Solana address.
    */
   async accountInfo(address: string): Promise<AccountInfo | undefined> {
-    if (typeof address !== 'string') throw new Error(`accountInfo: wrong address=${address}`);
+    if (typeof address !== 'string')
+      throw new TypeError(`accountInfo: expected address string, got ${typeof address}`);
     const res = await this.base64Call('getAccountInfo', address);
     if (res === null) return undefined;
     const data = decodeData(res.data);
@@ -223,17 +297,17 @@ export class ArchiveNodeProvider {
   }
   /**
    * Checks if account is valid token account (required to send tokens)
-   * @param mint token contract
-   * @param address address to check
-   * @param owner check if owner of token account is specific address
-   * @returns true if valid
+   * @param mint - Token mint address.
+   * @param address - Token-account address to check.
+   * @param owner - Optional owner address that must match the token account.
+   * @returns `true` when the account matches the expected token-account shape.
    */
   async isValidTokenAccount(mint: string, address: string, owner?: string): Promise<boolean> {
     const info = await this.accountInfo(address);
     if (!info) return false;
-    if (info.owner !== sol.TOKEN_PROGRAM) return false;
+    if (info.owner !== TOKEN_PROGRAM) return false;
     try {
-      const dataFull = sol.TokenAccount(info.data);
+      const dataFull = TokenAccount(info.data);
       if (dataFull.TAG !== 'token') return false;
       const data = dataFull.data;
       if (data.mint !== mint) return false;
@@ -246,11 +320,14 @@ export class ArchiveNodeProvider {
   }
   /**
    * Returns minimum balance required to make account rent exempt.
-   * @param size - Account data length (bytes)
-   * @returns
+   * @param size - Account data length in bytes.
+   * @returns Minimum lamport balance required for rent exemption.
    */
   minBalance(size: number): Promise<any> {
-    if (!Number.isSafeInteger(size)) throw new Error(`minBalance: wrong size=${size}`);
+    if (typeof size !== 'number')
+      throw new TypeError(`minBalance: expected size number, got ${typeof size}`);
+    if (!Number.isSafeInteger(size) || size < 0)
+      throw new RangeError(`minBalance: wrong size=${size}`);
     return this.rpc.call('getMinimumBalanceForRentExemption', size);
   }
   /**
@@ -273,21 +350,22 @@ export class ArchiveNodeProvider {
     const res = await this.accountInfo(address);
     if (!res || res.owner !== 'AddressLookupTab1e1111111111111111111111111')
       throw new Error('wrong contract');
-    return sol.AddressTableLookupData(res.data);
+    return AddressTableLookupData(res.data);
   }
   /**
    * Returns account balance and latest blockhash (required to create new transaction)
-   * @param address - Solana address
+   * @param address - Solana address.
    */
   async unspent(address: string): Promise<Unspent> {
-    if (typeof address !== 'string') throw new Error(`unspent: wrong address=${address}`);
+    if (typeof address !== 'string')
+      throw new TypeError(`unspent: expected address string, got ${typeof address}`);
     const [info, blockHash] = await Promise.all([
       this.accountInfo(address),
       this.recentBlockHash(),
     ]);
     return {
       symbol: 'SOL',
-      decimals: sol.PRECISION,
+      decimals: PRECISION,
       balance: BigInt(info === undefined ? 0 : info.lamports),
       blockhash: blockHash.blockhash,
       active: info !== undefined,
@@ -295,17 +373,18 @@ export class ArchiveNodeProvider {
   }
   /**
    * Returns information about token accounts for address
-   * @param address - Solana address
-   * @param tokensInfo - Tokens information (sol.COMMON_TOKENS), Record<mintAddress, TokenInfo>
-   * @returns
+   * @param address - Solana address.
+   * @param tokensInfo - Token metadata keyed by mint address, such as `COMMON_TOKENS`.
+   * @returns Token balances for the owner's token accounts.
    */
   async tokenBalances(
     address: string,
     tokensInfo: Record<string, TokenInfo>
   ): Promise<TokenBalance[]> {
-    if (typeof address !== 'string') throw new Error(`tokenBalance: wrong address=${address}`);
+    if (typeof address !== 'string')
+      throw new TypeError(`tokenBalance: expected address string, got ${typeof address}`);
     const tokens: TokenAccountsOwner[] = await this.jsonCall('getTokenAccountsByOwner', address, {
-      programId: sol.TOKEN_PROGRAM,
+      programId: TOKEN_PROGRAM,
     });
     if (!Array.isArray(tokens)) throw new Error('sol.unspent: incorrect tokens value');
     const res: TokenBalance[] = [];
@@ -331,8 +410,8 @@ export class ArchiveNodeProvider {
       maxSupportedTransactionVersion: 0,
     });
     const rawBytes = decodeData(tx.transaction) as Uint8Array;
-    sol.verifyTx(rawBytes);
-    const rawTx = sol.TransactionRaw.decode(rawBytes);
+    verifyTx(rawBytes);
+    const rawTx = TransactionRaw.decode(rawBytes);
     const keys = rawTx.msg.data.keys;
     const transfers = [];
     for (let i = 0; i < keys.length; i++) {
@@ -405,12 +484,15 @@ export class ArchiveNodeProvider {
   }
   /**
    * Returns all transaction information for address.
-   * @param address - Solana address
+   * @param address - Solana address.
    */
   async transfers(address: string, perRequest = 1000): Promise<TxTransfers[]> {
-    if (typeof address !== 'string') throw new Error(`transfers: wrong address=${address}`);
-    if (!Number.isSafeInteger(perRequest))
-      throw new Error(`transfers: wrong perRequest ${perRequest}, expected integer`);
+    if (typeof address !== 'string')
+      throw new TypeError(`transfers: expected address string, got ${typeof address}`);
+    if (typeof perRequest !== 'number')
+      throw new TypeError(`transfers: expected perRequest number, got ${typeof perRequest}`);
+    if (!Number.isSafeInteger(perRequest) || perRequest <= 0)
+      throw new RangeError(`transfers: wrong perRequest ${perRequest}, expected positive integer`);
     const txPromises: Record<string, Promise<TxTransfers>> = {};
     const fetchTx = (signature: string) => {
       if (signature in txPromises) return;
@@ -418,7 +500,7 @@ export class ArchiveNodeProvider {
     };
     const pMain = this.addressTransactions(address, fetchTx, perRequest);
     const tokens: TokenAccountsOwner[] = await this.jsonCall('getTokenAccountsByOwner', address, {
-      programId: sol.TOKEN_PROGRAM,
+      programId: TOKEN_PROGRAM,
     });
     await Promise.all([
       pMain,
@@ -433,14 +515,33 @@ export class ArchiveNodeProvider {
   }
 }
 
+/** Running balance snapshots derived from transfers. */
 export type Balances = {
+  /** Native SOL balances keyed by address. */
   balances: Record<string, bigint>;
+  /** Token balances keyed by mint and then address. */
   tokenBalances: Record<string, Record<string, bigint>>;
 };
 /**
  * Calculates balances at specific point in time after tx.
  * Also, useful as a sanity check in case we've missed something.
  * Info from multiple addresses can be merged (sort everything first).
+ * @param transfers - Sorted transaction summaries.
+ * @returns Transactions annotated with running balances.
+ * @example
+ * Fold sorted transfers into running native and token balances.
+ * ```ts
+ * import { calcTransfersDiff } from 'micro-sol-signer/net.js';
+ * const [tx] = calcTransfersDiff([
+ *   {
+ *     hash: 'tx',
+ *     transfers: [{ to: 'alice', value: 2n }],
+ *     tokenTransfers: [],
+ *     reverted: false,
+ *     info: { raw: '', log: [], fee: 0n },
+ *   },
+ * ]);
+ * ```
  */
 export function calcTransfersDiff(transfers: TxTransfers[]): (TxTransfers & Balances)[] {
   const balances: Record<string, bigint> = {};

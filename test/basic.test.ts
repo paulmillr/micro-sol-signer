@@ -41,6 +41,12 @@ describe('Solana', () => {
     const key = hex.decode('1b2f49096e3e5dbd0fcfa9c0c0cd92d9ab3b21544b34d5dd4a65d98b878b9922');
     deepStrictEqual(sol.formatPublic(key), '2q7pyhPwAwZ3QMfZrnAbDhnh9mDUqycszcpf86VgQxhF');
   });
+  should('validateAddress validators', () => {
+    sol.validateAddress('11111111111111111111111111111111');
+    throws(() => sol.validateAddress(1 as any), RangeError);
+    throws(() => sol.validateAddress('1111'), RangeError);
+    throws(() => sol.validateAddress('not-base58'), RangeError);
+  });
   should('format private key base58', () => {
     const key = hex.decode('99da9559e15e913ee9ab2e53e3dfad575da33b49be1125bb922e33494f498828');
     deepStrictEqual(
@@ -158,6 +164,31 @@ describe('Solana', () => {
     );
     deepStrictEqual(sol.getMessageFromTransaction(base64.encode(expSigned)), message);
     deepStrictEqual(sol.getMessageFromTransaction(base64.encode(expUnsigned)), message);
+  });
+  should('createTokenTransferChecked', () => {
+    const mint = 'So11111111111111111111111111111111111111112';
+    const from = 'EqywLUZcm73PSWri93X3M5TN62iFMsUPMjvWYUq89dKB';
+    const to = 'FDwkzWGxx6LfCfzcmVVLEk3QUMxNhuFuKEMRwzR4Dtys';
+    const amount = 12345n;
+    const decimals = 4;
+    const blockhash = 'J2BjKU6L83eehHVgoze6uTXGCBu6nbxsqEro9QvWpU52';
+    deepStrictEqual(
+      sol.createTokenTransferChecked(mint, from, to, amount, decimals, blockhash),
+      sol.createTx(
+        from,
+        [
+          sol.token.transferChecked({
+            source: sol.tokenAddress({ mint, owner: from, tokenProgram: sol.TOKEN_PROGRAM }),
+            mint,
+            destination: sol.tokenAddress({ mint, owner: to, tokenProgram: sol.TOKEN_PROGRAM }),
+            authority: from,
+            amount,
+            decimals,
+          }),
+        ],
+        blockhash
+      )
+    );
   });
   should('sys/createAccount', () => {
     const opt = {

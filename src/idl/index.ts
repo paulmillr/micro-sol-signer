@@ -42,8 +42,20 @@ These are anchor v00/v01, but it is possible to convert these to codama:
 */
 
 // Utils
+/** Default Solana decimal precision for SOL amounts. */
 export const PRECISION = 9;
-export const Decimal = P.coders.decimal(PRECISION);
+/**
+ * Decimal coder for lamport-denominated SOL values.
+ * @example
+ * Convert between human-readable SOL amounts and lamports.
+ * ```ts
+ * import { Decimal } from 'micro-sol-signer/idl.js';
+ * const lamports = Decimal.decode('1.5');
+ * const amount = Decimal.encode(lamports); // '1.5'
+ * ```
+ */
+export const Decimal = /* @__PURE__ */ P.coders.decimal(PRECISION);
+/** Generic byte-array type used across IDL helpers. */
 export type Bytes = Uint8Array;
 
 const b58 = () => {
@@ -56,7 +68,17 @@ const b58 = () => {
 };
 
 // first bit -- terminator (1 -- continue, 0 -- last)
-export const shortU16 = P.wrap({
+/**
+ * Short variable-length `u16` coder used by Solana message formats.
+ * @example
+ * Round-trip the compact length prefix used in Solana message arrays.
+ * ```ts
+ * import { shortU16 } from 'micro-sol-signer/idl.js';
+ * const encoded = shortU16.encode(300);
+ * const decoded = shortU16.decode(encoded); // 300
+ * ```
+ */
+export const shortU16 = /* @__PURE__ */ P.wrap({
   encodeStream: (w: P.Writer, value: number) => {
     if (!value) return w.byte(0);
     for (; value; value >>= 7) {
@@ -75,13 +97,33 @@ export const shortU16 = P.wrap({
   },
 });
 
-export const pubKey = b58();
+/**
+ * Base58-encoded public key coder.
+ * @example
+ * Encode and decode the base58 public-key strings used by Solana RPC APIs.
+ * ```ts
+ * import { pubKey } from 'micro-sol-signer/idl.js';
+ * const owner = pubKey.decode(pubKey.encode('11111111111111111111111111111111'));
+ * ```
+ */
+export const pubKey = /* @__PURE__ */ b58();
 
 function mod(a: bigint, b: bigint = ed25519.Point.Fp.ORDER) {
   const res = a % b;
   return res >= 0n ? res : b + res;
 }
 
+/**
+ * Checks whether bytes decode to a valid Ed25519 point on curve.
+ * @param bytes - Public key bytes or base58 string.
+ * @returns `true` when the value is on the Ed25519 curve.
+ * @example
+ * Distinguish a Solana public key from an arbitrary base58 string before using it as an owner.
+ * ```ts
+ * import { isOnCurve } from 'micro-sol-signer/idl.js';
+ * const isAddress = isOnCurve('11111111111111111111111111111111');
+ * ```
+ */
 export function isOnCurve(bytes: Bytes | string) {
   if (typeof bytes === 'string') bytes = base58.decode(bytes);
   try {
@@ -99,6 +141,19 @@ export function isOnCurve(bytes: Bytes | string) {
   }
 }
 
+/**
+ * Derives a Solana program-derived address for a program and seed list.
+ * @param program - Program address in base58 form.
+ * @param seeds - Seed byte slices used for derivation.
+ * @returns Base58-encoded PDA.
+ * @throws If no off-curve PDA can be found for the supplied seeds. {@link Error}
+ * @example
+ * Derive a deterministic PDA from a program id and one or more seed byte arrays.
+ * ```ts
+ * import { programAddress } from 'micro-sol-signer/idl.js';
+ * const vault = programAddress('11111111111111111111111111111111', Uint8Array.of(1, 2, 3));
+ * ```
+ */
 export function programAddress(program: string, ...seeds: Bytes[]) {
   let seed = P.utils.concatBytes(...seeds);
   const noncePos = seed.length;
@@ -218,7 +273,7 @@ function postfix<T>(inner: P.CoderType<T>, postfix: Uint8Array): P.CoderType<T> 
   });
 }
 
-const EMPTY = P.magic(P.bytes(0), new Uint8Array(0));
+const EMPTY = /* @__PURE__ */ (() => P.magic(P.bytes(0), new Uint8Array(0)))();
 
 function fixedOptional<T>(
   flag: P.CoderType<boolean>,
@@ -641,6 +696,7 @@ type GetTypeBase<T extends BasicType, DT extends DefinedTypes = {}> =
   T extends OptionalType ? GetType<T['item'], DT> | undefined :
   unknown; // default
 
+/** Maps an IDL type node into the corresponding TypeScript type. */
 export type GetType<T extends BasicType, DT extends DefinedTypes = {}> = T extends {
   defaultValue: Exclude<DefaultValue, { kind: (typeof IGNORE_DEFAULT)[number] }>;
   defaultValueStrategy?: infer Strategy;
@@ -770,10 +826,25 @@ function mapTypeInternal(type: BasicType, definedTypes: DefinedTypes = {}): any 
   return t(type, definedTypes);
 }
 
+/**
+ * Maps an IDL type node into a `micro-packed` coder.
+ * @param type - IDL type node to map.
+ * @param dt - Already-defined linked types.
+ * @returns Coder for the requested type node.
+ * @throws If the IDL type node, linked types, or default-value strategy is invalid. {@link Error}
+ * @example
+ * Build a coder directly from an IDL type node before wiring it into an instruction or account.
+ * ```ts
+ * import { mapType } from 'micro-sol-signer/idl.js';
+ * const u8 = mapType({ kind: 'numberTypeNode', format: 'u8', endian: 'le' }, {});
+ * u8.encode(7);
+ * ```
+ */
 export function mapType<T extends BasicType, DT extends DefinedTypes>(
   type: T,
   dt: DT
-): GetType<T, DT> {
+): P.CoderType<GetType<T, DT>> {
+  // Public callers use the returned coder directly; exposing only the decoded value type breaks `.encode()` / `.decode()`.
   const t = mapTypeInternal(type, dt);
   // Inner type of field type is already mapped!
   if (
@@ -796,6 +867,7 @@ type DefinedType = {
   readonly type: BasicType;
 };
 
+/** Produces the typed coder map for `definedTypes`. */
 export type GetDefinedTypes<T extends ArrLike<DefinedType>> = {
   [K in T[number]['name']]: P.CoderType<GetType<Extract<T[number], { name: K }>['type']>>;
 };
@@ -834,6 +906,32 @@ type PDAs<T extends ArrLike<PDAType>, DT extends DefinedTypes = {}> = {
   [K in T[number]['name']]: (value: GetPDASeeds<Extract<T[number], { name: K }>, DT>) => string;
 };
 
+/**
+ * Builds PDA helper functions from IDL PDA definitions.
+ * @param program - Program address in base58 form.
+ * @param pda - PDA definitions from the IDL.
+ * @param dt - Defined type coders used by PDA seeds.
+ * @returns PDA helper map keyed by PDA name.
+ * @example
+ * Generate typed PDA helpers and call one with its seed object.
+ * ```ts
+ * import { parsePDAs } from 'micro-sol-signer/idl.js';
+ * const pdas = parsePDAs('11111111111111111111111111111111', [
+ *   {
+ *     kind: 'pdaNode',
+ *     name: 'vault',
+ *     seeds: [
+ *       {
+ *         kind: 'variablePdaSeedNode',
+ *         name: 'owner',
+ *         type: { kind: 'publicKeyTypeNode' },
+ *       },
+ *     ],
+ *   },
+ * ]);
+ * const vault = pdas.vault({ owner: '11111111111111111111111111111111' });
+ * ```
+ */
 export function parsePDAs<T extends ArrLike<PDAType>, DT extends DefinedTypes = {}>(
   program: string,
   pda: T,
@@ -907,6 +1005,7 @@ type GetArgumentType<A extends Argument, DT extends DefinedTypes = {}> = A exten
       ? GetType<T, DT>
       : unknown;
 
+/** Maps instruction argument nodes into their TypeScript object shape. */
 export type GetTypeArguments<T extends ArrLike<Argument>, DT extends DefinedTypes = {}> = {
   [K in Extract<T[number], { name: string }>['name']]: GetArgumentType<
     Extract<T[number], { name: K }>,
@@ -1004,6 +1103,7 @@ type ProgramInstruction = Node<
   }
 >;
 
+/** Maps instruction account definitions into the required account input shape. */
 export type GetTypeAccounts<T extends ArrLike<Account>> = {
   [K in Extract<T[number], { name: string }>['name']]: Extract<T[number], { name: K }> extends {
     defaultValue?: { kind: 'publicKeyValueNode' };
@@ -1012,6 +1112,7 @@ export type GetTypeAccounts<T extends ArrLike<Account>> = {
     : string; // All other accounts are required
 };
 
+/** Turns properties containing `undefined` into optional fields. */
 export type Nullable<T> =
   // Pick all non-undefinable keys as required properties
   {
@@ -1021,6 +1122,7 @@ export type Nullable<T> =
     [K in keyof T as undefined extends T[K] ? K : never]?: Exclude<T[K], undefined>;
   };
 
+/** Combines instruction arguments and accounts into one input shape. */
 export type GetInstructionArgs<
   T extends ProgramInstruction,
   DT extends DefinedTypes = {},
@@ -1033,15 +1135,23 @@ type DecodedInstruction<T extends ProgramInstruction, DT extends DefinedTypes = 
   };
 };
 
+/** Encoders and decoder generated for a program's instruction set. */
 export type ParsedInstructions<
   T extends ArrLike<ProgramInstruction>,
   DT extends DefinedTypes = {},
 > = {
+  /** Instruction encoders keyed by instruction name. */
   encoders: {
     [K in T[number]['name']]: (
       inst: GetInstructionArgs<Extract<T[number], { name: K }>, DT>
     ) => Instruction;
   };
+  /**
+   * Instruction decoder for the owning program.
+   * @param inst - Raw instruction to decode.
+   * @param opts - Optional reader settings. See {@link P.ReaderOpts}.
+   * @returns Decoded instruction tagged with its instruction name.
+   */
   decoder: (inst: Instruction, opts?: P.ReaderOpts) => DecodedInstruction<T[number], DT>;
 };
 
@@ -1116,14 +1226,40 @@ type DecodedAccount<T extends ArrLike<ContractAccount>, DT extends DefinedTypes 
   };
 }[T[number]['name']];
 
+/** Typed account coders and decoder generated from IDL account definitions. */
 export type AccountDefinitions<T extends ArrLike<ContractAccount>, DT extends DefinedTypes = {}> = {
+  /** Account coders keyed by account name. */
   coders: {
     [K in T[number]['name']]: P.CoderType<GetType<Extract<T[number], { name: K }>['data'], DT>>;
   };
 
+  /**
+   * Decoder that tags decoded data with the matching account name.
+   * @param data - Raw account bytes.
+   * @param opts - Optional reader settings. See {@link P.ReaderOpts}.
+   * @returns Decoded account tagged with the matching account name.
+   */
   decoder: (data: Uint8Array, opts?: P.ReaderOpts) => DecodedAccount<T, DT>;
 };
 
+/**
+ * Builds account coders and a decoder from IDL account definitions.
+ * @param accounts - Account nodes from the IDL.
+ * @param types - Defined type coders referenced by the accounts.
+ * @returns Typed account coder set and decoder.
+ * @throws If an account node or its discriminators are invalid. {@link Error}
+ * @example
+ * Build account coders once, then reuse them for encode/decode.
+ * ```ts
+ * import { defineAccounts } from 'micro-sol-signer/idl.js';
+ * const accounts = defineAccounts(
+ *   [{ kind: 'accountNode', name: 'counter', data: { kind: 'numberTypeNode', format: 'u8', endian: 'le' } }],
+ *   {}
+ * );
+ * const data = accounts.coders.counter.encode(7);
+ * accounts.decoder(data);
+ * ```
+ */
 export function defineAccounts<T extends ArrLike<ContractAccount>, DT extends DefinedTypes>(
   accounts: T,
   types: DT
@@ -1167,6 +1303,27 @@ type GetTypeProgram<P extends Program> = {
   accounts: AccountDefinitions<P['accounts'], GetDefinedTypes<P['definedTypes']>>;
 };
 
+/**
+ * Builds typed helpers for one Solana program node.
+ * @param p - Program node from the IDL.
+ * @returns Typed program helpers for accounts, instructions, and PDAs.
+ * @throws If the program node is malformed or its typed helpers cannot be constructed. {@link Error}
+ * @example
+ * Build one typed helper bundle for a single program node.
+ * ```ts
+ * import { defineProgram } from 'micro-sol-signer/idl.js';
+ * const program = defineProgram({
+ *   kind: 'programNode',
+ *   name: 'demo',
+ *   publicKey: '11111111111111111111111111111111',
+ *   definedTypes: [],
+ *   pdas: [],
+ *   instructions: [],
+ *   accounts: [],
+ * });
+ * const contract = program.contract;
+ * ```
+ */
 export function defineProgram<P extends Program>(p: P): GetTypeProgram<P> {
   if (p.kind !== 'programNode') throw new Error('idl: wrong program node');
   const types = parseDefinedTypes(p.definedTypes) as any;
@@ -1193,6 +1350,31 @@ type GetTypeIDL<T extends IDL> = {
   };
 };
 
+/**
+ * Builds typed helpers for a root IDL and its additional programs.
+ * @param idl - Root IDL document.
+ * @returns Object keyed by the root program name.
+ * @throws If the root IDL contains malformed program definitions. {@link Error}
+ * @example
+ * Build helpers for the root program and any additional programs declared in the IDL.
+ * ```ts
+ * import { defineIDL } from 'micro-sol-signer/idl.js';
+ * const idl = defineIDL({
+ *   kind: 'rootNode',
+ *   program: {
+ *     kind: 'programNode',
+ *     name: 'demo',
+ *     publicKey: '11111111111111111111111111111111',
+ *     definedTypes: [],
+ *     pdas: [],
+ *     instructions: [],
+ *     accounts: [],
+ *   },
+ *   additionalPrograms: [],
+ * });
+ * const contract = idl.demo.program.contract;
+ * ```
+ */
 export function defineIDL<T extends IDL>(idl: T): GetTypeIDL<T> {
   const res: Record<string, any> = {
     [idl.program.name]: {

@@ -51,6 +51,19 @@ const Message = P.apply(MessageRaw, {
   },
 });
 
+/**
+ * Offchain message coders and sign/verify helpers compatible with the Solana CLI.
+ * @example
+ * Sign the exact offchain message format that `solana sign-offchain-message` expects.
+ * ```ts
+ * import { hex } from '@scure/base';
+ * import { Offchain } from 'micro-sol-signer/offchain.js';
+ * const signature = Offchain.sign(
+ *   hex.decode('000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f'),
+ *   'hello'
+ * );
+ * ```
+ */
 export const Offchain = {
   Message,
   MessageRaw,
