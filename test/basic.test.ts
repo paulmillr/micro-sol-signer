@@ -43,7 +43,7 @@ describe('Solana', () => {
   });
   should('validateAddress validators', () => {
     sol.validateAddress('11111111111111111111111111111111');
-    throws(() => sol.validateAddress(1 as any), RangeError);
+    throws(() => sol.validateAddress(1 as any), TypeError);
     throws(() => sol.validateAddress('1111'), RangeError);
     throws(() => sol.validateAddress('not-base58'), RangeError);
   });
