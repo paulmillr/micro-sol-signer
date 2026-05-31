@@ -18,6 +18,7 @@ export default {
         ],
         remainingAccounts: [
           {
+            // Memo signer accounts are carried as remainingAccounts; bare memos omit this field.
             kind: 'instructionRemainingAccountsNode',
             value: { kind: 'argumentValueNode', name: 'signers' },
             isOptional: true,

@@ -113,6 +113,220 @@ describe('Solana', () => {
       )
     );
   });
+  should('message rejects impossible required signature counts', () => {
+    const bytes = sol.MessageRaw.encode({
+      TAG: 'legacy',
+      data: {
+        header: { requiredSignatures: 2, readSigned: 0, readUnsigned: 0 },
+        keys: ['11111111111111111111111111111111'],
+        blockhash: '11111111111111111111111111111111',
+        instructions: [],
+      },
+    });
+    throws(() => sol.Message.decode(bytes), /required signatures exceed account keys/);
+  });
+  should('message rejects impossible readonly signed counts', () => {
+    const bytes = sol.MessageRaw.encode({
+      TAG: 'legacy',
+      data: {
+        header: { requiredSignatures: 0, readSigned: 2, readUnsigned: 0 },
+        keys: ['11111111111111111111111111111111'],
+        blockhash: '11111111111111111111111111111111',
+        instructions: [],
+      },
+    });
+    throws(() => sol.Message.decode(bytes), /readonly signed accounts exceed required signatures/);
+  });
+  should('message rejects impossible readonly unsigned counts', () => {
+    const bytes = sol.MessageRaw.encode({
+      TAG: 'legacy',
+      data: {
+        header: { requiredSignatures: 1, readSigned: 0, readUnsigned: 1 },
+        keys: ['11111111111111111111111111111111'],
+        blockhash: '11111111111111111111111111111111',
+        instructions: [],
+      },
+    });
+    throws(() => sol.Message.decode(bytes), /readonly unsigned accounts exceed unsigned accounts/);
+  });
+  should('message rejects impossible instruction account indexes', () => {
+    const msg = {
+      TAG: 'legacy',
+      data: {
+        header: { requiredSignatures: 1, readSigned: 0, readUnsigned: 0 },
+        keys: ['11111111111111111111111111111111'],
+        blockhash: '11111111111111111111111111111111',
+        instructions: [{ programIdx: 0, keys: [1], data: Uint8Array.of(1) }],
+      },
+    } as const;
+    throws(
+      () => sol.Message.decode(sol.MessageRaw.encode(msg)),
+      /instruction key index exceeds account keys/
+    );
+    throws(
+      () =>
+        sol.Message.decode(
+          sol.MessageRaw.encode({
+            ...msg,
+            data: {
+              ...msg.data,
+              instructions: [{ programIdx: 1, keys: [], data: Uint8Array.of(1) }],
+            },
+          })
+        ),
+      /program index exceeds account keys/
+    );
+  });
+  should('message decode copies instruction data bytes', () => {
+    const bytes = sol.MessageRaw.encode({
+      TAG: 'legacy',
+      data: {
+        header: { requiredSignatures: 1, readSigned: 0, readUnsigned: 1 },
+        keys: ['11111111111111111111111111111111', '3gqrRcuQ8xprBhymXS1FctNxi8hbw3bz5EgKBUgSWiQH'],
+        blockhash: '11111111111111111111111111111111',
+        instructions: [{ programIdx: 1, keys: [0], data: Uint8Array.of(1, 2, 3) }],
+      },
+    });
+    const original = bytes.slice();
+    const decoded = sol.Message.decode(bytes);
+    decoded.instructions[0].data[0] = 9;
+    deepStrictEqual(bytes, original);
+  });
+  should('message decode does not share account meta objects', () => {
+    const bytes = sol.MessageRaw.encode({
+      TAG: 'legacy',
+      data: {
+        header: { requiredSignatures: 1, readSigned: 0, readUnsigned: 1 },
+        keys: ['11111111111111111111111111111111', '3gqrRcuQ8xprBhymXS1FctNxi8hbw3bz5EgKBUgSWiQH'],
+        blockhash: '11111111111111111111111111111111',
+        instructions: [{ programIdx: 1, keys: [0, 0], data: Uint8Array.of(1) }],
+      },
+    });
+    const decoded = sol.Message.decode(bytes);
+    decoded.instructions[0].keys[0].write = false;
+    deepStrictEqual(decoded.instructions[0].keys, [
+      { address: '11111111111111111111111111111111', sign: true, write: false },
+      { address: '11111111111111111111111111111111', sign: true, write: true },
+    ]);
+  });
+  should('message raw decode copies compiled instruction data bytes', () => {
+    const bytes = sol.MessageRaw.encode({
+      TAG: 'legacy',
+      data: {
+        header: { requiredSignatures: 1, readSigned: 0, readUnsigned: 1 },
+        keys: ['11111111111111111111111111111111', '3gqrRcuQ8xprBhymXS1FctNxi8hbw3bz5EgKBUgSWiQH'],
+        blockhash: '11111111111111111111111111111111',
+        instructions: [{ programIdx: 1, keys: [0], data: Uint8Array.of(1, 2, 3) }],
+      },
+    });
+    const original = bytes.slice();
+    const decoded = sol.MessageRaw.decode(bytes);
+    decoded.data.instructions[0].data[0] = 9;
+    deepStrictEqual(bytes, original);
+  });
+  should('message rejects malformed high-level instruction fields', () => {
+    const msg = {
+      version: 'legacy',
+      feePayer: '11111111111111111111111111111111',
+      blockhash: '11111111111111111111111111111111',
+      instructions: [
+        {
+          program: '11111111111111111111111111111111',
+          keys: [
+            {
+              address: '3gqrRcuQ8xprBhymXS1FctNxi8hbw3bz5EgKBUgSWiQH',
+              sign: false,
+              write: false,
+            },
+          ],
+          data: Uint8Array.of(1),
+        },
+      ],
+    } as const;
+    throws(() => sol.Message.encode({ ...msg, feePayer: 1 } as any), /feePayer must be a string/);
+    throws(
+      () =>
+        sol.Message.encode({
+          ...msg,
+          instructions: [{ ...msg.instructions[0], program: 1 }] as any,
+        }),
+      /instruction program must be a string/
+    );
+    throws(
+      () =>
+        sol.Message.encode({
+          ...msg,
+          instructions: [
+            {
+              ...msg.instructions[0],
+              keys: [{ ...msg.instructions[0].keys[0], address: 1 }],
+            },
+          ] as any,
+        }),
+      /account address must be a string/
+    );
+    throws(
+      () =>
+        sol.Message.encode({
+          ...msg,
+          instructions: [
+            {
+              ...msg.instructions[0],
+              keys: [{ ...msg.instructions[0].keys[0], sign: 1 }],
+            },
+          ] as any,
+        }),
+      /account sign flag must be boolean/
+    );
+    throws(
+      () =>
+        sol.Message.encode({
+          ...msg,
+          instructions: [
+            {
+              ...msg.instructions[0],
+              keys: [{ ...msg.instructions[0].keys[0], write: 1 }],
+            },
+          ] as any,
+        }),
+      /account write flag must be boolean/
+    );
+  });
+  should('message rejects malformed high-level message objects', () => {
+    throws(() => sol.Message.encode(undefined as any), /message must be an object/);
+    throws(() => sol.Message.encode(null as any), /message must be an object/);
+    throws(() => sol.Message.encode([] as any), /message must be an object/);
+    const msg = {
+      version: 'legacy',
+      feePayer: '11111111111111111111111111111111',
+      blockhash: '11111111111111111111111111111111',
+      instructions: [],
+    } as const;
+    throws(
+      () => sol.Message.encode({ ...msg, version: undefined } as any),
+      /unsupported message version/
+    );
+    throws(() => sol.Message.encode({ ...msg, version: 1 } as any), /unsupported message version/);
+    throws(
+      () =>
+        sol.Transaction.encode({
+          msg: { ...msg, version: 1 } as any,
+          signatures: {},
+        }),
+      /unsupported message version/
+    );
+  });
+  should('createTx rejects malformed instruction lists', () => {
+    throws(
+      () =>
+        sol.createTx(
+          '11111111111111111111111111111111',
+          undefined as any,
+          '11111111111111111111111111111111'
+        ),
+      /instructions must be an array/
+    );
+  });
   should('transaction', () => {
     const privKey = new Uint8Array(32).fill(8);
     const source = sol.getAddress(privKey);
@@ -164,6 +378,173 @@ describe('Solana', () => {
     );
     deepStrictEqual(sol.getMessageFromTransaction(base64.encode(expSigned)), message);
     deepStrictEqual(sol.getMessageFromTransaction(base64.encode(expUnsigned)), message);
+  });
+  should('transaction rejects signature count mismatches', () => {
+    const privateKey = new Uint8Array(32).fill(8);
+    const source = sol.getAddress(privateKey);
+    const msg = {
+      TAG: 'legacy',
+      data: {
+        header: { requiredSignatures: 1, readSigned: 0, readUnsigned: 1 },
+        keys: [source, '11111111111111111111111111111111'],
+        blockhash: 'EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3hq1k',
+        instructions: [],
+      },
+    } as const;
+    const raw = (count: number) => {
+      const sigs = Array.from({ length: count }, (_, i) => new Uint8Array(64).fill(i + 1));
+      const chunks = [sol.shortU16.encode(count), ...sigs, sol.MessageRaw.encode(msg)];
+      const res = new Uint8Array(chunks.reduce((sum, chunk) => sum + chunk.length, 0));
+      let pos = 0;
+      for (const chunk of chunks) {
+        res.set(chunk, pos);
+        pos += chunk.length;
+      }
+      return res;
+    };
+    throws(
+      () => sol.TransactionRaw.encode({ signatures: [], msg }),
+      /signatures length does not match required signatures/
+    );
+    throws(
+      () => sol.TransactionRaw.decode(raw(0)),
+      /signatures length does not match required signatures/
+    );
+    throws(
+      () => sol.TransactionRaw.decode(raw(2)),
+      /signatures length does not match required signatures/
+    );
+    throws(() => sol.verifyTx(raw(2)), /signatures length does not match required signatures/);
+    throws(
+      () => sol.signTx(privateKey, raw(0)),
+      /signatures length does not match required signatures/
+    );
+    throws(
+      () => sol.signTx(privateKey, raw(2)),
+      /signatures length does not match required signatures/
+    );
+    throws(
+      () => sol.getMessageFromTransaction(base64.encode(raw(0))),
+      /signatures length does not match required signatures/
+    );
+    throws(
+      () => sol.getMessageFromTransaction(base64.encode(raw(2))),
+      /signatures length does not match required signatures/
+    );
+  });
+  should('transaction rejects malformed high-level signature maps', () => {
+    const privateKey = new Uint8Array(32).fill(8);
+    const source = sol.getAddress(privateKey);
+    const tx = {
+      msg: {
+        version: 'legacy',
+        feePayer: source,
+        blockhash: 'EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3hq1k',
+        instructions: [],
+      },
+      signatures: {},
+    };
+    throws(
+      () => sol.Transaction.encode({ ...tx, signatures: undefined } as any),
+      /signatures must be an object/
+    );
+    throws(
+      () => sol.Transaction.encode({ ...tx, signatures: null } as any),
+      /signatures must be an object/
+    );
+    throws(
+      () => sol.Transaction.encode({ ...tx, signatures: [] } as any),
+      /signatures must be an object/
+    );
+  });
+  should('transaction rejects malformed high-level transaction objects', () => {
+    throws(() => sol.Transaction.encode(undefined as any), /transaction must be an object/);
+    throws(() => sol.Transaction.encode(null as any), /transaction must be an object/);
+    throws(() => sol.Transaction.encode(1 as any), /transaction must be an object/);
+    throws(() => sol.Transaction.encode([] as any), /transaction must be an object/);
+  });
+  should('transaction rejects invalid embedded raw messages', () => {
+    const privateKey = new Uint8Array(32).fill(8);
+    const source = sol.getAddress(privateKey);
+    const sig = new Uint8Array(64);
+    const raw = (msg: any, signatures: Uint8Array[]) => {
+      const chunks = [
+        sol.shortU16.encode(signatures.length),
+        ...signatures,
+        sol.MessageRaw.encode(msg),
+      ];
+      const res = new Uint8Array(chunks.reduce((sum, chunk) => sum + chunk.length, 0));
+      let pos = 0;
+      for (const chunk of chunks) {
+        res.set(chunk, pos);
+        pos += chunk.length;
+      }
+      return res;
+    };
+    const badHeader = {
+      TAG: 'legacy',
+      data: {
+        header: { requiredSignatures: 2, readSigned: 0, readUnsigned: 0 },
+        keys: [source],
+        blockhash: 'EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3hq1k',
+        instructions: [],
+      },
+    } as const;
+    const badInstruction = {
+      TAG: 'legacy',
+      data: {
+        header: { requiredSignatures: 1, readSigned: 0, readUnsigned: 0 },
+        keys: [source],
+        blockhash: 'EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3hq1k',
+        instructions: [{ programIdx: 0, keys: [1], data: Uint8Array.of(1) }],
+      },
+    } as const;
+    throws(
+      () => sol.TransactionRaw.encode({ signatures: [sig, sig], msg: badHeader }),
+      /required signatures exceed account keys/
+    );
+    throws(
+      () => sol.TransactionRaw.decode(raw(badHeader, [sig, sig])),
+      /required signatures exceed account keys/
+    );
+    throws(
+      () => sol.TransactionRaw.encode({ signatures: [sig], msg: badInstruction }),
+      /instruction key index exceeds account keys/
+    );
+    throws(
+      () => sol.TransactionRaw.decode(raw(badInstruction, [sig])),
+      /instruction key index exceeds account keys/
+    );
+    throws(
+      () => sol.signTx(privateKey, raw(badInstruction, [sig])),
+      /instruction key index exceeds account keys/
+    );
+    throws(
+      () => sol.getMessageFromTransaction(base64.encode(raw(badInstruction, [sig]))),
+      /instruction key index exceeds account keys/
+    );
+  });
+  should('transaction decode copies signature bytes', () => {
+    const source = '11111111111111111111111111111111';
+    const raw = sol.TransactionRaw.encode({
+      signatures: [new Uint8Array(64).fill(1)],
+      msg: {
+        TAG: 'legacy',
+        data: {
+          header: { requiredSignatures: 1, readSigned: 0, readUnsigned: 1 },
+          keys: [source, '3gqrRcuQ8xprBhymXS1FctNxi8hbw3bz5EgKBUgSWiQH'],
+          blockhash: '11111111111111111111111111111111',
+          instructions: [],
+        },
+      },
+    });
+    const original = raw.slice();
+    const decodedRaw = sol.TransactionRaw.decode(raw);
+    decodedRaw.signatures[0][0] = 9;
+    deepStrictEqual(raw, original);
+    const decoded = sol.Transaction.decode(raw);
+    decoded.signatures[source][0] = 9;
+    deepStrictEqual(raw, original);
   });
   should('createTokenTransferChecked', () => {
     const mint = 'So11111111111111111111111111111111111111112';
@@ -898,7 +1279,7 @@ describe('Solana', () => {
           { address: '7o36UsWR1JQLpZ9PE2gn9L4SQ69CNNiWAXd4Jt7rqz9Z', sign: false, write: false },
           { address: '11111111111111111111111111111111', sign: false, write: false },
           { address: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', sign: false, write: false },
-          //       { address: 'SysvarRent111111111111111111111111111111111', sign: false, write: false },
+          // { address: 'SysvarRent111111111111111111111111111111111', sign: false, write: false },
         ],
         data: Uint8Array.of(0),
       });

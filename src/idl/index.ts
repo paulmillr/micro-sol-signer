@@ -1,9 +1,10 @@
 import { ed25519 } from '@noble/curves/ed25519.js';
 import { sha256 } from '@noble/hashes/sha2.js';
-import { concatBytes } from '@noble/hashes/utils.js';
-import { base16, base58, base64, utf8 } from '@scure/base';
+import { concatBytes, isBytes } from '@noble/hashes/utils.js';
+import { base16, base58, base64, utf8, type TArg, type TRet } from '@scure/base';
 import * as P from 'micro-packed';
 import type { Instruction } from '../index.ts';
+export type { TArg, TRet } from '@scure/base';
 
 /*
 # What is IDL?
@@ -37,11 +38,33 @@ These are anchor v00/v01, but it is possible to convert these to codama:
 - PDA as parseValue
 - IDL mostly works, but I don't trust it
 - various link/semantic node values
-- not padded preOffsetTypeNode/postOffsetTypeNode: unclear how to do this without adjusting micro-packed
+- not padded preOffsetTypeNode/postOffsetTypeNode: unclear how to do this without adjusting
+  micro-packed
     - does not seem to be used
 */
 
-// Utils
+/**
+ * Recursively freezes an object graph in place.
+ * @param obj - Value to freeze.
+ * @returns The same value after freezing every reachable array or object value.
+ * @example
+ * Freeze generated IDL helper constants before exporting them.
+ * ```ts
+ * import { deepFreeze } from 'micro-sol-signer/idl.js';
+ * deepFreeze({ accounts: [{ name: 'state' }] });
+ * ```
+ */
+export function deepFreeze<T>(obj: T): T {
+  if (obj === null || typeof obj !== 'object' || isBytes(obj)) return obj;
+  if (Object.isFrozen(obj)) return obj;
+  Object.freeze(obj);
+  if (Array.isArray(obj)) {
+    for (const item of obj) deepFreeze(item);
+  } else {
+    for (const value of Object.values(obj)) deepFreeze(value);
+  }
+  return obj;
+}
 /** Default Solana decimal precision for SOL amounts. */
 export const PRECISION = 9;
 /**
@@ -54,22 +77,35 @@ export const PRECISION = 9;
  * const amount = Decimal.encode(lamports); // '1.5'
  * ```
  */
-export const Decimal = /* @__PURE__ */ P.coders.decimal(PRECISION);
+export const Decimal: P.Coder<bigint, string> = /* @__PURE__ */ deepFreeze(
+  /* @__PURE__ */ P.coders.decimal(PRECISION)
+);
 /** Generic byte-array type used across IDL helpers. */
 export type Bytes = Uint8Array;
+/** Public coder type with byte outputs narrowed for TS generic Uint8Array compatibility. */
+export type CoderType<T> = TRet<
+  Omit<P.CoderType<T>, 'decode' | 'decodeStream' | 'encode' | 'encodeStream'> & {
+    encode: (data: TArg<T>) => TRet<Uint8Array>;
+    decode: (data: TArg<Uint8Array>, opts?: P.ReaderOpts) => TRet<T>;
+    encodeStream: (w: P.Writer, value: TArg<T>) => void;
+    decodeStream: (r: P.Reader) => TRet<T>;
+  }
+>;
 
-const b58 = () => {
+const b58 = (): TRet<CoderType<string>> => {
   const inner = P.bytes(32);
   return P.wrap({
     size: inner.size,
     encodeStream: (w: P.Writer, value: string) => inner.encodeStream(w, base58.decode(value)),
     decodeStream: (r: P.Reader): string => base58.encode(inner.decodeStream(r)),
-  });
+  }) as CoderType<string>;
 };
 
 // first bit -- terminator (1 -- continue, 0 -- last)
 /**
  * Short variable-length `u16` coder used by Solana message formats.
+ * Despite the historical name, this keeps consuming 7-bit groups until it sees a
+ * terminator bit or the input ends.
  * @example
  * Round-trip the compact length prefix used in Solana message arrays.
  * ```ts
@@ -78,24 +114,26 @@ const b58 = () => {
  * const decoded = shortU16.decode(encoded); // 300
  * ```
  */
-export const shortU16 = /* @__PURE__ */ P.wrap({
-  encodeStream: (w: P.Writer, value: number) => {
-    if (!value) return w.byte(0);
-    for (; value; value >>= 7) {
-      w.bits(value > 0x7f ? 1 : 0, 1);
-      w.bits(value & 0x7f, 7);
-    }
-  },
-  decodeStream: (r: P.Reader): number => {
-    let len = 0;
-    for (let pos = 0; !r.isEnd(); pos++) {
-      const last = !r.bits(1);
-      len |= r.bits(7) << (pos * 7);
-      if (last) break;
-    }
-    return len;
-  },
-});
+export const shortU16: TRet<CoderType<number>> = /* @__PURE__ */ deepFreeze(
+  /* @__PURE__ */ P.wrap({
+    encodeStream: (w: P.Writer, value: number) => {
+      if (!value) return w.byte(0);
+      for (; value; value >>= 7) {
+        w.bits(value > 0x7f ? 1 : 0, 1);
+        w.bits(value & 0x7f, 7);
+      }
+    },
+    decodeStream: (r: P.Reader): number => {
+      let len = 0;
+      for (let pos = 0; !r.isEnd(); pos++) {
+        const last = !r.bits(1);
+        len |= r.bits(7) << (pos * 7);
+        if (last) break;
+      }
+      return len;
+    },
+  }) as CoderType<number>
+);
 
 /**
  * Base58-encoded public key coder.
@@ -106,11 +144,12 @@ export const shortU16 = /* @__PURE__ */ P.wrap({
  * const owner = pubKey.decode(pubKey.encode('11111111111111111111111111111111'));
  * ```
  */
-export const pubKey = /* @__PURE__ */ b58();
+export const pubKey: TRet<CoderType<string>> = /* @__PURE__ */ deepFreeze(/* @__PURE__ */ b58());
+const _0n = /* @__PURE__ */ BigInt(0);
 
 function mod(a: bigint, b: bigint = ed25519.Point.Fp.ORDER) {
   const res = a % b;
-  return res >= 0n ? res : b + res;
+  return res >= _0n ? res : b + res;
 }
 
 /**
@@ -124,14 +163,14 @@ function mod(a: bigint, b: bigint = ed25519.Point.Fp.ORDER) {
  * const isAddress = isOnCurve('11111111111111111111111111111111');
  * ```
  */
-export function isOnCurve(bytes: Bytes | string) {
+export function isOnCurve(bytes: TArg<Bytes | string>): boolean {
   if (typeof bytes === 'string') bytes = base58.decode(bytes);
   try {
-    // noble-ed25519 checks that publicKey is < P, but dalek (ed25519-dalek.CompressedEdwardsY) is not, so we do modulo here.
+    // noble-ed25519 checks that publicKey is < P, but dalek does not, so reduce modulo P.
     // first bit in last byte is x oddity flag
     const last = bytes[31];
-    const normedLast = last & ~0x80;
-    const normed = Uint8Array.from(Array.from(bytes.slice(0, 31)).concat(normedLast));
+    const normed = Uint8Array.from(bytes.subarray(0, 32));
+    normed[31] = last & ~0x80;
     const modBytes = P.U256LE.encode(mod(P.U256LE.decode(normed)));
     if ((last & 0x80) !== 0) modBytes[31] |= 0x80;
     ed25519.Point.fromBytes(modBytes);
@@ -154,7 +193,7 @@ export function isOnCurve(bytes: Bytes | string) {
  * const vault = programAddress('11111111111111111111111111111111', Uint8Array.of(1, 2, 3));
  * ```
  */
-export function programAddress(program: string, ...seeds: Bytes[]) {
+export function programAddress(program: string, ...seeds: TArg<Bytes[]>): string {
   let seed = P.utils.concatBytes(...seeds);
   const noncePos = seed.length;
   seed = P.utils.concatBytes(
@@ -219,22 +258,45 @@ const defaultCoder = <T>(inner: P.CoderType<T>, value: T): P.CoderType<T | undef
 // TODO: it should be done via flags?
 function zeroable<T>(inner: P.CoderType<T>): P.CoderType<T | undefined> {
   if (!Number.isSafeInteger(inner.size)) throw new Error('zeroable on unsized element');
+  // The all-zero inner encoding is reserved as the undefined sentinel.
   const ZEROS = new Uint8Array(inner.size!);
   return P.wrap({
     size: inner.size,
     encodeStream(w, value: T | undefined) {
       if (value === undefined) w.bytes(ZEROS);
-      else inner.encodeStream(w, value);
+      else {
+        const bytes = inner.encode(value);
+        // Present values must not collide with the undefined sentinel because decode reserves it.
+        if (P.utils.equalBytes(bytes, ZEROS))
+          throw new Error('zeroable: encoded value collides with undefined sentinel');
+        w.bytes(bytes);
+      }
     },
-    decodeStream: inner.decodeStream,
+    decodeStream(r) {
+      // Check bytes before inner decoding, otherwise a zero public key becomes the Solana 111...
+      // address.
+      if (P.utils.equalBytes(r.bytes(inner.size!, true), ZEROS)) {
+        r.bytes(inner.size!);
+        return;
+      }
+      return inner.decodeStream(r);
+    },
   }) as P.CoderType<T | undefined>;
 }
 
 function remainder<T>(inner: P.CoderType<T>): P.CoderType<T | undefined> {
   return P.wrap({
-    size: inner.size,
+    // `undefined` is EOF, so non-empty fixed-size items still produce variable-size option bytes.
+    size: inner.size === 0 ? 0 : undefined,
     encodeStream(w, value: T | undefined) {
-      if (value !== undefined) inner.encodeStream(w, value);
+      // EOF is reserved as the undefined sentinel, so present values must not encode to an empty
+      // tail.
+      if (value !== undefined) {
+        const bytes = inner.encode(value);
+        if (!bytes.length)
+          throw new Error('remainder: encoded value collides with undefined sentinel');
+        w.bytes(bytes);
+      }
     },
     decodeStream(r) {
       if (r.isEnd()) return undefined;
@@ -243,9 +305,11 @@ function remainder<T>(inner: P.CoderType<T>): P.CoderType<T | undefined> {
   }) as P.CoderType<T | undefined>;
 }
 
-function prefix<T>(inner: P.CoderType<T>, prefix: Uint8Array): P.CoderType<T> {
+function prefix<T>(inner: P.CoderType<T>, prefix: TArg<Uint8Array>): P.CoderType<T> {
   return P.wrap({
-    size: inner.size,
+    // Hidden prefix bytes are value-hidden, not byte-hidden, so fixed-size metadata must include
+    // them.
+    size: inner.size === undefined ? undefined : prefix.length + inner.size,
     encodeStream(w, value: T) {
       w.bytes(prefix);
       inner.encodeStream(w, value);
@@ -258,9 +322,11 @@ function prefix<T>(inner: P.CoderType<T>, prefix: Uint8Array): P.CoderType<T> {
   });
 }
 
-function postfix<T>(inner: P.CoderType<T>, postfix: Uint8Array): P.CoderType<T> {
+function postfix<T>(inner: P.CoderType<T>, postfix: TArg<Uint8Array>): P.CoderType<T> {
   return P.wrap({
-    size: inner.size,
+    // Hidden suffix bytes are value-hidden, not byte-hidden, so fixed-size metadata must include
+    // them.
+    size: inner.size === undefined ? undefined : inner.size + postfix.length,
     encodeStream(w, value: T) {
       inner.encodeStream(w, value);
       w.bytes(postfix);
@@ -286,12 +352,17 @@ function fixedOptional<T>(
   return P.wrap({
     size: flag.size + inner.size,
     encodeStream: (w, value: T | undefined) => {
-      flag.encodeStream(w, !!value);
-      if (value) inner.encodeStream(w, value);
+      // Presence is only undefined; falsy payloads like 0/false/0n are valid option values.
+      const present = value !== undefined;
+      flag.encodeStream(w, present);
+      if (present) inner.encodeStream(w, value);
       else w.bytes(new Uint8Array(inner.size!));
     },
     decodeStream: (r): T | undefined => {
-      if (flag.decodeStream(r)) return inner.decodeStream(r);
+      const present = flag.decodeStream(r);
+      if (typeof present !== 'boolean')
+        throw new Error(`fixedOptional: expected boolean flag, got ${typeof present}`);
+      if (present) return inner.decodeStream(r);
       else {
         if (!P.utils.equalBytes(r.bytes(inner.size!), new Uint8Array(inner.size!)))
           throw new Error('fixedOptional: wrong padding');
@@ -327,7 +398,8 @@ type PdaValue = Node<
   { readonly pda: PdaLink; readonly seeds: ArrLike<PdaSeedValue> }
 >;
 type IdentityValue = Node<'identityValueNode'>; // like payer?
-type AccountValue = Node<'accountValueNode', { readonly name: 'authority' }>; // defaults to another account?
+// Defaults to another account.
+type AccountValue = Node<'accountValueNode', { readonly name: string }>;
 type DefaultValue =
   | NumberValue
   | NoneValue
@@ -359,7 +431,7 @@ function parseValueInt<
   T extends DefaultValue,
   PT extends ArrLike<PDAType>,
   DT extends DefinedTypes,
->(value: T, _pdas: PDAs<PT, DT>, _dt: DT) {
+>(value: T, _pdas: TArg<PDAs<PT, DT>>, _dt: DT) {
   // Everything is bigint, except things that used as counters (array length/etc)
   if (value.kind === 'numberValueNode') return value.number;
   if (value.kind === 'noneValueNode') return undefined;
@@ -389,6 +461,8 @@ function parseValueInt<
   }
   throw new Error('wrong default value');
 }
+// These defaults depend on runtime account resolution, so parseValue() cannot synthesize them from
+// static IDL data.
 const IGNORE_DEFAULT = [
   'payerValueNode',
   'accountBumpValueNode',
@@ -398,7 +472,7 @@ const IGNORE_DEFAULT = [
 function parseValue<T extends BasicType, PT extends ArrLike<PDAType>, DT extends DefinedTypes>(
   node: T,
   val: any,
-  pdas: PDAs<PT, DT>,
+  pdas: TArg<PDAs<PT, DT>>,
   dt: DT
 ) {
   if (node.defaultValue) {
@@ -678,7 +752,9 @@ type GetTypeBase<T extends BasicType, DT extends DefinedTypes = {}> =
   T extends PublicKeyType ? string :
   // Structs
   T extends ArrayType ? (GetType<T['item'], DT>)[] :
-  T extends MapType ? Map<GetType<T['key'], DT>, GetType<T['value'], DT>> :  // TODO: fix to map?
+  // Map nodes use object-record values in Codama dynamic clients and in the dict() runtime path
+  // here.
+  T extends MapType ? Record<string, GetType<T['value'], DT>> :
   T extends StructType ? GetTypeStruct<T, DT> :
   T extends TupleType ? GetTypeTuple<T, DT> :
   T extends EnumType ? GetTypeEnum<T, DT> :
@@ -714,7 +790,15 @@ const types: Record<string, (type: any, dt: DefinedTypes) => P.CoderType<any>> =
   publicKeyTypeNode: () => pubKey,
   numberTypeNode: (type: NumericType) => parseNumeric(type),
   booleanTypeNode: (type: BooleanType) => P.apply(parseNumericSafe(type.size), numBool),
-  bytesTypeNode: (_type: BytesType) => P.bytes(null),
+  bytesTypeNode: (_type: BytesType) =>
+    P.apply(P.bytes(null), {
+      encode(from) {
+        // P.bytes(null) can decode a view into caller-owned bytes; IDL byte fields must own their
+        // data. Buffer.slice() aliases memory, so force a fresh Uint8Array copy.
+        return Uint8Array.from(from);
+      },
+      decode: (to) => to,
+    }),
   // Strip zero bytes from string: ugly, but required for compatibility with solana utf8 coder
   stringTypeNode: (_type: StringType) =>
     P.validate(P.string(null), (s) => s.replace(/\u0000/g, '')),
@@ -736,7 +820,8 @@ const types: Record<string, (type: any, dt: DefinedTypes) => P.CoderType<any>> =
       type.prefix ? type.prefix : { kind: 'numberTypeNode', format: 'u8', endian: 'le' }
     );
     if (type.fixed === true) {
-      if (!inner.size) throw new Error('optional fixed=true with unsized element');
+      // Zero-byte items are fixed-size too; the presence flag still distinguishes Some from None.
+      if (inner.size === undefined) throw new Error('optional fixed=true with unsized element');
       return fixedOptional(P.apply(prefix, numBool), inner);
     }
     return P.optional(P.apply(prefix, numBool), inner);
@@ -746,13 +831,18 @@ const types: Record<string, (type: any, dt: DefinedTypes) => P.CoderType<any>> =
     P.array(parseCount(type.count), (mapType as any)(type.item, dt)),
   enumVariant: (type: EnumVariants, dt: DefinedTypes = {}) => {
     if (type.kind === 'enumStructVariantTypeNode') return (mapType as any)(type.struct, dt);
-    if (type.kind === 'enumTupleVariantTypeNode') return mapType(type.tuple, dt);
+    if (type.kind === 'enumTupleVariantTypeNode') return (mapType as any)(type.tuple, dt);
     if (type.kind === 'enumEmptyVariantTypeNode') return EMPTY;
     throw new Error('unknown enum variant');
   },
   enumTypeNode: (type: EnumType, dt: DefinedTypes = {}) => {
     const variants = Object.fromEntries(
-      type.variants.map((i, j) => [i.name, [i.discriminator || j, types.enumVariant(i, dt)]])
+      type.variants.map((i, j) => [
+        i.name,
+        // Discriminator 0 is explicit; only an absent discriminator falls back to the variant
+        // index.
+        [i.discriminator === undefined ? j : i.discriminator, types.enumVariant(i, dt)],
+      ])
     );
     return P.mappedTag(parseNumericSafe(type.size), variants as any);
   },
@@ -773,18 +863,20 @@ const types: Record<string, (type: any, dt: DefinedTypes) => P.CoderType<any>> =
   structTypeNode: <T extends StructType, DT extends DefinedTypes>(
     type: T,
     dt: DT
-  ): P.CoderType<GetTypeStruct<T, DT>> =>
-    P.struct(
-      Object.fromEntries(
-        type.fields.map((i) => {
-          if (i.kind !== 'structFieldTypeNode') throw new Error('wrong structFieldTypeNode');
-          return [i.name, mapType(i, dt)];
-        })
-      ) as any
+  ): TRet<P.CoderType<GetTypeStruct<T, DT>>> =>
+    // Preserve IDL field order; plain objects reorder numeric-like names before P.struct can see
+    // them.
+    orderedStruct(
+      type.fields.map((i) => {
+        if (i.kind !== 'structFieldTypeNode') throw new Error('wrong structFieldTypeNode');
+        return [i.name, (mapType as any)(i, dt)] as const;
+      })
     ) as any,
   tupleTypeNode: (type: TupleType, dt: DefinedTypes = {}) =>
     P.tuple(type.items.map((i) => (mapType as any)(i, dt))),
   definedTypeLinkNode: (type: DefinedType, dt: DefinedTypes = {}) => {
+    // Resolve links lazily so forward and recursive defined-type references can populate `dt`
+    // later.
     return P.lazy(() => {
       if (!dt[type.name]) throw new Error('unknown type: ' + type.name);
       return dt[type.name];
@@ -795,27 +887,38 @@ const types: Record<string, (type: any, dt: DefinedTypes) => P.CoderType<any>> =
   remainderOptionTypeNode: <T extends RemainderOptionType>(type: T, dt: DefinedTypes = {}) =>
     remainder((mapType as any)(type.item, dt)),
   constantValueNode: <T extends ConstantType>(type: T, dt: DefinedTypes = {}) =>
+    // Constant IDL nodes are static markers: they validate the fixed bytes and never expose the
+    // constant to callers.
     P.magic((mapType as any)(type.type, dt), parseValueInt(type.value, {}, dt)),
   hiddenPrefixTypeNode: <T extends HiddenPrefixType>(type: T, dt: DefinedTypes = {}) => {
     return prefix(
       (mapType as any)(type.type, dt),
+      // Hidden prefix items are encoded eagerly, so each prefix node must have a fixed value
+      // without caller input.
       concatBytes(...type.prefix.map((i) => (mapType as any)(i, dt).encode()))
     );
   },
   hiddenSuffixTypeNode: <T extends HiddenSuffixType>(type: T, dt: DefinedTypes = {}) =>
     postfix(
       (mapType as any)(type.type, dt),
+      // Hidden suffix items are encoded eagerly, so each suffix node must have a fixed value
+      // without caller input.
       concatBytes(...type.suffix.map((i) => (mapType as any)(i, dt).encode()))
     ),
   preOffsetTypeNode: <T extends PreOffsetType>(type: T, dt: DefinedTypes = {}) => {
     if (type.strategy === 'padded')
       return prefix((mapType as any)(type.type, dt), new Uint8Array(type.offset));
-    // TODO: this includes very complex pointer-like manipulation that I'm not sure how to implement yet.
+    // Only the padded strategy is wired today; absolute/relative offsets still throw until
+    // micro-packed grows pointer-style support.
+    // TODO: this includes very complex pointer-like manipulation that I'm not sure how to implement
+    // yet.
     throw new Error('not implemented');
   },
   postOffsetTypeNode: <T extends PreOffsetType>(type: T, dt: DefinedTypes = {}) => {
     if (type.strategy === 'padded')
       return postfix((mapType as any)(type.type, dt), new Uint8Array(type.offset));
+    // Only the padded strategy is wired today; absolute/relative offsets still throw until
+    // micro-packed grows pointer-style support.
     throw new Error('not implemented');
   },
 };
@@ -825,6 +928,50 @@ function mapTypeInternal(type: BasicType, definedTypes: DefinedTypes = {}): any 
   if (t === undefined) throw new Error('Unknown type: ' + type.kind);
   return t(type, definedTypes);
 }
+
+const RESERVED_FIELD_NAMES = new Set(['__proto__', 'constructor', 'prototype']);
+const orderedStruct = (fields: readonly (readonly [string, P.CoderType<any>])[]) => {
+  const seen = new Set<string>();
+  let size: number | undefined = 0;
+  for (const [name, coder] of fields) {
+    if (typeof name !== 'string')
+      throw new Error(`struct: field should be string, got ${typeof name}`);
+    if (seen.has(name)) throw new Error(`duplicate struct field name: ${name}`);
+    seen.add(name);
+    if (name.includes('..'))
+      throw new TypeError(`struct: field ${name} cannot contain path parent ..`);
+    if (name.includes('/'))
+      throw new TypeError(`struct: field ${name} cannot contain path separator /`);
+    if (RESERVED_FIELD_NAMES.has(name)) throw new Error(`struct: field ${name} is reserved`);
+    if (!P.isCoder(coder)) throw new TypeError(`struct: field ${name} is not CoderType`);
+    if (size !== undefined) {
+      if (coder.size === undefined) size = undefined;
+      else if (!Number.isSafeInteger(coder.size))
+        throw new Error(`sizeof: wrong element size=${coder.size}`);
+      else size += coder.size;
+    }
+  }
+  return P.wrap({
+    size,
+    encodeStream(w: P.Writer, value: Record<string, any>) {
+      (w as any).pushObj(value, (field: (name: string, fn: () => void) => void) => {
+        for (const [name, coder] of fields) field(name, () => coder.encodeStream(w, value[name]));
+      });
+    },
+    decodeStream(r: P.Reader) {
+      const res: Record<string, any> = {};
+      (r as any).pushObj(res, (field: (name: string, fn: () => void) => void) => {
+        for (const [name, coder] of fields) field(name, () => (res[name] = coder.decodeStream(r)));
+      });
+      return res;
+    },
+    validate(value: Record<string, any>) {
+      if (typeof value !== 'object' || value === null)
+        throw new Error(`struct: invalid value ${value}`);
+      return value;
+    },
+  });
+};
 
 /**
  * Maps an IDL type node into a `micro-packed` coder.
@@ -843,8 +990,9 @@ function mapTypeInternal(type: BasicType, definedTypes: DefinedTypes = {}): any 
 export function mapType<T extends BasicType, DT extends DefinedTypes>(
   type: T,
   dt: DT
-): P.CoderType<GetType<T, DT>> {
-  // Public callers use the returned coder directly; exposing only the decoded value type breaks `.encode()` / `.decode()`.
+): TRet<CoderType<GetType<T, DT>>> {
+  // Public callers use the returned coder directly; exposing only the decoded value type breaks
+  // `.encode()` / `.decode()`.
   const t = mapTypeInternal(type, dt);
   // Inner type of field type is already mapped!
   if (
@@ -858,7 +1006,7 @@ export function mapType<T extends BasicType, DT extends DefinedTypes>(
       return defaultCoder(t, def) as any;
     throw new Error('wrong defaultValueStrategy: ' + type.defaultValueStrategy);
   }
-  return t;
+  return t as any;
 }
 
 type DefinedType = {
@@ -869,12 +1017,21 @@ type DefinedType = {
 
 /** Produces the typed coder map for `definedTypes`. */
 export type GetDefinedTypes<T extends ArrLike<DefinedType>> = {
-  [K in T[number]['name']]: P.CoderType<GetType<Extract<T[number], { name: K }>['type']>>;
+  [K in T[number]['name']]: CoderType<GetType<Extract<T[number], { name: K }>['type']>>;
 };
-function parseDefinedTypes<T extends ArrLike<DefinedType>>(types: T): GetDefinedTypes<T> {
+function parseDefinedTypes<T extends ArrLike<DefinedType>>(types: T) {
   const res: Record<string, any> = {};
+  const seen = new Set<string>();
+  // Reuse one mutable map so forward and recursive definedTypeLinkNode coders all resolve against
+  // the same object.
   // Disable recursive stuff here
-  for (const t of types) res[t.name] = (mapType as any)(t.type, res);
+  for (const t of types) {
+    // Duplicate type names resolve first-vs-last differently across Codama consumers, so reject the
+    // ambiguous IDL.
+    if (seen.has(t.name)) throw new Error('duplicate defined type name: ' + t.name);
+    seen.add(t.name);
+    res[t.name] = (mapType as any)(t.type, res);
+  }
   return res as any;
 }
 
@@ -912,6 +1069,8 @@ type PDAs<T extends ArrLike<PDAType>, DT extends DefinedTypes = {}> = {
  * @param pda - PDA definitions from the IDL.
  * @param dt - Defined type coders used by PDA seeds.
  * @returns PDA helper map keyed by PDA name.
+ * @throws If the PDA definitions or linked seed types are malformed. {@link Error}
+ * @throws On wrong argument types. {@link TypeError}
  * @example
  * Generate typed PDA helpers and call one with its seed object.
  * ```ts
@@ -936,24 +1095,27 @@ export function parsePDAs<T extends ArrLike<PDAType>, DT extends DefinedTypes = 
   program: string,
   pda: T,
   dt: DT = {} as DT
-): PDAs<T, DT> {
+): TRet<PDAs<T, DT>> {
   const res: Record<string, any> = {};
+  const seen = new Set<string>();
   for (const p of pda) {
-    const fields = Object.fromEntries(
-      p.seeds.map((seed) => {
-        if (seed.kind === 'variablePdaSeedNode')
-          return [seed.name, (mapType as any)(seed.type, dt)];
-        if (seed.kind === 'constantPdaSeedNode') {
-          // TODO: check
-          return [
-            seed.name,
-            P.magic((mapType as any)(seed.type, dt), parseValueInt(seed.value, res, dt)),
-          ];
-        }
-        throw new Error('unknown seed type');
-      })
-    );
-    const coder = P.struct(fields);
+    // Codama rejects duplicate PDA additions; accepting them here would silently replace helpers.
+    if (seen.has(p.name)) throw new Error('duplicate PDA name: ' + p.name);
+    seen.add(p.name);
+    const fields = p.seeds.map((seed) => {
+      if (seed.kind === 'variablePdaSeedNode')
+        return [seed.name, (mapType as any)(seed.type, dt)] as const;
+      if (seed.kind === 'constantPdaSeedNode') {
+        // TODO: check
+        return [
+          seed.name,
+          P.magic((mapType as any)(seed.type, dt), parseValueInt(seed.value, res, dt)),
+        ] as const;
+      }
+      throw new Error('unknown seed type');
+    });
+    // PDA derivation is byte-order sensitive; keep declared seed order even for numeric-like names.
+    const coder = orderedStruct(fields);
     res[p.name] = (value: any) => programAddress(program, coder.encode(value));
   }
   return res as any;
@@ -1016,20 +1178,29 @@ export type GetTypeArguments<T extends ArrLike<Argument>, DT extends DefinedType
 function parseArguments<T extends ArrLike<Argument>, DT extends DefinedTypes>(
   args: T,
   types: DT
-): GetTypeArguments<T, DT> {
-  const res: Record<string, any> = {};
+): TRet<CoderType<GetTypeArguments<T, DT>>> {
+  const fields = [];
+  const seen = new Set<string>();
   for (const a of args) {
     if (a.kind !== 'instructionArgumentNode') throw new Error('instructionArgumentNode');
+    // Codama validators reject conflicting argument names; accepting them here would silently
+    // replace coders.
+    if (seen.has(a.name)) throw new Error('duplicate argument name: ' + a.name);
+    seen.add(a.name);
     const type = (mapType as any)(
       { ...a.type, defaultValue: a.defaultValue, defaultValueStrategy: a.defaultValueStrategy },
       types
     );
-    res[a.name] = type;
+    fields.push([a.name, type] as const);
   }
-  return res as GetTypeArguments<T, DT>;
+  // Instruction data is byte-order sensitive; keep declared argument order even for numeric-like
+  // names.
+  return orderedStruct(fields) as any;
 }
 
 function getFieldBytes(node: any, field: string, types: DefinedTypes) {
+  // Field discriminators derive their bytes from encode(undefined), so the referenced field must
+  // have a deterministic default or constant encoding.
   if (node.kind === 'accountNode') {
     if (node.data.kind === 'structTypeNode') {
       for (const f of node.data.fields) {
@@ -1050,37 +1221,42 @@ function getFieldBytes(node: any, field: string, types: DefinedTypes) {
   throw new Error('getFieldBytes wrong node type: ' + node.kind);
 }
 
+// Boolean account data can decode to false, so candidate misses need a sentinel that cannot collide
+// with payloads.
+const DECODER_MISS = Symbol('decoder miss');
 function decodeDiscriminators(
   discriminators: ArrLike<Discriminator>,
   coder: any,
   node: any,
   types: DefinedTypes
 ) {
-  return (data: Uint8Array, opts?: P.ReaderOpts) => {
+  return (data: TArg<Uint8Array>, opts?: P.ReaderOpts) => {
     // This is slower and worse than previous version via tag, but significantly more flexible
     for (const d of discriminators) {
-      if (d.kind === 'sizeDiscriminatorNode' && data.length !== d.size) return false;
+      if (d.kind === 'sizeDiscriminatorNode' && data.length !== d.size) return DECODER_MISS;
       if (d.kind === 'constantDiscriminatorNode') {
-        throw new Error('constantDiscriminatorNode not imeplemented');
+        // Constant discriminators are part of the public IDL surface, but this decoder path still
+        // does not support them.
+        throw new Error('constantDiscriminatorNode not implemented');
       }
       if (d.kind === 'fieldDiscriminatorNode') {
         const bytes = getFieldBytes(node, d.name, types);
         const realBytes = data.subarray(d.offset, d.offset + bytes.length);
-        if (!P.utils.equalBytes(bytes, realBytes)) return false;
+        if (!P.utils.equalBytes(bytes, realBytes)) return DECODER_MISS;
       }
     }
     return coder.decode(data, opts);
   };
 }
 
-function buildDecoder<T extends Record<string, (data: Uint8Array, opts?: P.ReaderOpts) => any>>(
-  decoders: T
-) {
+function buildDecoder<
+  T extends Record<string, (data: TArg<Uint8Array>, opts?: P.ReaderOpts) => any>,
+>(decoders: T) {
   // TODO: P.match?
-  return (data: Uint8Array, opts?: P.ReaderOpts) => {
+  return (data: TArg<Uint8Array>, opts?: P.ReaderOpts) => {
     for (const [name, decoder] of Object.entries(decoders)) {
       const value = decoder(data, opts);
-      if (value !== false) return { TAG: name, data: value };
+      if (value !== DECODER_MISS) return { TAG: name, data: value };
     }
     throw new Error('Unknown value');
   };
@@ -1103,12 +1279,16 @@ type ProgramInstruction = Node<
   }
 >;
 
+// Static public-key defaults and accountValueNode references are auto-resolved when omitted.
+type AutoResolvableAccountDefault = { kind: 'publicKeyValueNode' } | { kind: 'accountValueNode' };
 /** Maps instruction account definitions into the required account input shape. */
 export type GetTypeAccounts<T extends ArrLike<Account>> = {
   [K in Extract<T[number], { name: string }>['name']]: Extract<T[number], { name: K }> extends {
-    defaultValue?: { kind: 'publicKeyValueNode' };
+    defaultValue: infer Default;
   }
-    ? undefined // Account with publicKeyValueNode default is optional
+    ? Default extends AutoResolvableAccountDefault
+      ? undefined
+      : string
     : string; // All other accounts are required
 };
 
@@ -1143,8 +1323,8 @@ export type ParsedInstructions<
   /** Instruction encoders keyed by instruction name. */
   encoders: {
     [K in T[number]['name']]: (
-      inst: GetInstructionArgs<Extract<T[number], { name: K }>, DT>
-    ) => Instruction;
+      inst: TArg<GetInstructionArgs<Extract<T[number], { name: K }>, DT>>
+    ) => TRet<Instruction>;
   };
   /**
    * Instruction decoder for the owning program.
@@ -1152,28 +1332,72 @@ export type ParsedInstructions<
    * @param opts - Optional reader settings. See {@link P.ReaderOpts}.
    * @returns Decoded instruction tagged with its instruction name.
    */
-  decoder: (inst: Instruction, opts?: P.ReaderOpts) => DecodedInstruction<T[number], DT>;
+  decoder: (inst: TArg<Instruction>, opts?: P.ReaderOpts) => DecodedInstruction<T[number], DT>;
 };
 
 function parseInstructions<
   T extends ArrLike<ProgramInstruction>,
   P extends PDAs<any, DT>,
   DT extends DefinedTypes,
->(instructions: T, types: DT, pdas: P, contract: string): ParsedInstructions<T, DT> {
+>(instructions: T, types: DT, pdas: P, contract: string): TRet<ParsedInstructions<T, DT>> {
   const encoders: Record<string, any> = {};
   const decoders: Record<string, any> = {};
   const instNames: Record<string, ProgramInstruction> = {};
+  const seen = new Set<string>();
+  const accountString = (name: string, value: any) => {
+    if (typeof value !== 'string') throw new Error(`account ${name} must be a string`);
+    return value;
+  };
+  const accountInput = (
+    accounts: ArrLike<Account>,
+    m: Account,
+    values: Record<string, any>,
+    stack: string[] = []
+  ): any => {
+    const value = values[m.name];
+    if (value !== undefined) return accountString(m.name, value);
+    const d = m.defaultValue;
+    if (d && d.kind === 'accountValueNode') {
+      if (stack.includes(m.name)) throw new Error('recursive account default: ' + m.name);
+      let next: Account | undefined = undefined;
+      for (const a of accounts) {
+        if (a.name === d.name) {
+          next = a;
+          break;
+        }
+      }
+      if (next === undefined) throw new Error('unknown account default: ' + d.name);
+      return accountInput(accounts, next, values, stack.concat(m.name));
+    }
+    const def = (parseValue as any)(m, undefined, pdas, types);
+    // Missing required accounts otherwise leak as undefined metas and fail later in message
+    // construction.
+    if (def === undefined) throw new Error('missing account: ' + m.name);
+    return accountString(m.name, def);
+  };
   for (const i of instructions) {
     if (i.kind !== 'instructionNode') throw new Error('wrong instructionNode');
-    const args = parseArguments(i.arguments, types) as any;
-    const type = P.struct(args);
+    // Instruction helpers are keyed by name, so duplicate names would silently replace
+    // encoder/decoder metadata.
+    if (seen.has(i.name)) throw new Error('duplicate instruction name: ' + i.name);
+    seen.add(i.name);
+    const accountNames = new Set<string>();
+    for (const account of i.accounts) {
+      if (accountNames.has(account.name))
+        throw new Error('duplicate instruction account name: ' + account.name);
+      accountNames.add(account.name);
+    }
+    const type = (parseArguments as any)(i.arguments, types) as any;
     instNames[i.name] = i;
-    encoders[i.name] = (inst: any): Instruction => {
+    encoders[i.name] = (inst: any): TRet<Instruction> => {
       const data = type.encode(inst);
-      const keys = i.accounts.map((i) => ({
-        address: (parseValue as any)(i, inst[i.name], pdas, types) as string,
-        sign: i.isSigner !== false, // either?
-        write: i.isWritable === true,
+      // Keep sibling account metadata available when resolving accountValueNode defaults.
+      const keys = i.accounts.map((account) => ({
+        address: accountInput(i.accounts, account, inst) as string,
+        // isSigner: 'either' stays signed by default so single-owner token helpers require
+        // owner/delegate signatures.
+        sign: account.isSigner !== false,
+        write: account.isWritable === true,
       }));
       if (i.remainingAccounts) {
         if (i.remainingAccounts.length !== 1)
@@ -1182,6 +1406,8 @@ function parseInstructions<
         if (r0.value.kind !== 'argumentValueNode')
           throw new Error('remainingAccounts: only argumentValueNode supported');
         const name = r0.value.name;
+        // Remaining-account encoding is intentionally not implemented yet; callers must build those
+        // metas manually.
         if (inst[name]) throw new Error('encode: remainingAccounts not implemented');
       }
       return { program: contract, keys, data };
@@ -1189,23 +1415,55 @@ function parseInstructions<
     decoders[i.name] = decodeDiscriminators(i.discriminators || [], type, i, types);
   }
   const decoderData = buildDecoder(decoders);
-  const decoder = (inst: Instruction, opts?: P.ReaderOpts) => {
+  const decoder = (inst: TArg<Instruction>, opts?: P.ReaderOpts) => {
+    // Generated decoders are public too; validate roots here, not only in parseInstruction().
+    if (!inst || typeof inst !== 'object') throw new Error('instruction must be an object');
+    if (typeof inst.program !== 'string') throw new Error('instruction program must be a string');
+    if (!Array.isArray(inst.keys)) throw new Error('instruction keys must be an array');
+    if (!(inst.data instanceof Uint8Array)) throw new Error('instruction data must be bytes');
     if (inst.program !== contract) throw new Error('wrong program address');
     const data = decoderData(inst.data, opts);
     const instMeta = instNames[data.TAG];
     const accounts = instMeta.accounts;
 
+    // This decoder still expects the fixed declared account prefix only; remaining accounts and
+    // omitted optional accounts are not unpacked here yet.
     if (inst.keys.length !== accounts.length) throw new Error('wrong number of accounts');
     // if (instMeta.remainingAccounts) {
     //   throw new Error('decode: remainingAccounts not implemented');
     // }
+    const actual: Record<string, string> = {};
+    const metas: Instruction['keys'] = [];
     for (let i = 0; i < accounts.length; i++) {
       const m = accounts[i];
       const r = inst.keys[i];
+      // parseInstruction accepts caller-built metas, so validate before exposing decoded account
+      // values.
+      if (!r || typeof r !== 'object') throw new Error('wrong account meta: ' + m.name);
+      accountString(m.name, r.address);
+      if (typeof r.sign !== 'boolean')
+        throw new Error(`account ${m.name} sign flag must be boolean`);
+      if (typeof r.write !== 'boolean')
+        throw new Error(`account ${m.name} write flag must be boolean`);
+      metas.push(r);
       if (m.isSigner === true && !r.sign) throw new Error('wrong sign flag');
       if (m.isWritable === true && !r.write) throw new Error('wrong write flag');
-      if (r.address !== (parseValue as any)(m, undefined, pdas, types))
-        data.data[m.name] = r.address;
+      actual[m.name] = r.address;
+    }
+    for (let i = 0; i < accounts.length; i++) {
+      const m = accounts[i];
+      const r = metas[i];
+      const d = m.defaultValue;
+      let accountDefault;
+      if (d && d.kind === 'accountValueNode') {
+        // accountValueNode references another runtime account, so it needs the full instruction key
+        // list.
+        accountDefault = actual[d.name];
+        if (accountDefault === undefined) throw new Error('unknown account default: ' + d.name);
+      } else {
+        accountDefault = (parseValue as any)(m, undefined, pdas, types);
+      }
+      if (r.address !== accountDefault) data.data[m.name] = r.address;
     }
     return data;
   };
@@ -1230,7 +1488,7 @@ type DecodedAccount<T extends ArrLike<ContractAccount>, DT extends DefinedTypes 
 export type AccountDefinitions<T extends ArrLike<ContractAccount>, DT extends DefinedTypes = {}> = {
   /** Account coders keyed by account name. */
   coders: {
-    [K in T[number]['name']]: P.CoderType<GetType<Extract<T[number], { name: K }>['data'], DT>>;
+    [K in T[number]['name']]: CoderType<GetType<Extract<T[number], { name: K }>['data'], DT>>;
   };
 
   /**
@@ -1239,7 +1497,7 @@ export type AccountDefinitions<T extends ArrLike<ContractAccount>, DT extends De
    * @param opts - Optional reader settings. See {@link P.ReaderOpts}.
    * @returns Decoded account tagged with the matching account name.
    */
-  decoder: (data: Uint8Array, opts?: P.ReaderOpts) => DecodedAccount<T, DT>;
+  decoder: (data: TArg<Uint8Array>, opts?: P.ReaderOpts) => TRet<DecodedAccount<T, DT>>;
 };
 
 /**
@@ -1253,7 +1511,8 @@ export type AccountDefinitions<T extends ArrLike<ContractAccount>, DT extends De
  * ```ts
  * import { defineAccounts } from 'micro-sol-signer/idl.js';
  * const accounts = defineAccounts(
- *   [{ kind: 'accountNode', name: 'counter', data: { kind: 'numberTypeNode', format: 'u8', endian: 'le' } }],
+ * [{ kind: 'accountNode', name: 'counter', data: { kind: 'numberTypeNode', format: 'u8', endian:
+ * 'le' } }],
  *   {}
  * );
  * const data = accounts.coders.counter.encode(7);
@@ -1263,11 +1522,16 @@ export type AccountDefinitions<T extends ArrLike<ContractAccount>, DT extends De
 export function defineAccounts<T extends ArrLike<ContractAccount>, DT extends DefinedTypes>(
   accounts: T,
   types: DT
-): AccountDefinitions<T, DT> {
+): TRet<AccountDefinitions<T, DT>> {
   const coders: Record<string, any> = {};
   const decoders: Record<string, any> = {};
+  const seen = new Set<string>();
   for (const a of accounts) {
     if (a.kind !== 'accountNode') throw new Error('wrong accountNode');
+    // Account names share these plain-object tables; duplicates would overwrite earlier coders and
+    // decoder metadata.
+    if (seen.has(a.name)) throw new Error('duplicate account name: ' + a.name);
+    seen.add(a.name);
     const type = (mapType as any)(a.data, types);
     // If size not available by coder construction: extract from size discriminator
     if (type.size === undefined) {
@@ -1280,8 +1544,13 @@ export function defineAccounts<T extends ArrLike<ContractAccount>, DT extends De
     coders[a.name] = type;
     decoders[a.name] = decodeDiscriminators(a.discriminators || [], type, a, types);
   }
-  const decoder = buildDecoder(decoders);
-  return { coders, decoder } as any;
+  const decoderData = buildDecoder(decoders);
+  const decoder = (data: TArg<Uint8Array>, opts?: P.ReaderOpts) => {
+    // Account decoders are public entrypoints; reject malformed roots before byte-reader setup.
+    if (!(data instanceof Uint8Array)) throw new Error('account data must be bytes');
+    return decoderData(data, opts);
+  };
+  return deepFreeze({ coders, decoder }) as any;
 }
 
 type Program = {
@@ -1307,7 +1576,9 @@ type GetTypeProgram<P extends Program> = {
  * Builds typed helpers for one Solana program node.
  * @param p - Program node from the IDL.
  * @returns Typed program helpers for accounts, instructions, and PDAs.
- * @throws If the program node is malformed or its typed helpers cannot be constructed. {@link Error}
+ * @throws If the program node is malformed or its typed helpers cannot be constructed. {@link
+ * Error}
+ * @throws On wrong argument types. {@link TypeError}
  * @example
  * Build one typed helper bundle for a single program node.
  * ```ts
@@ -1324,13 +1595,21 @@ type GetTypeProgram<P extends Program> = {
  * const contract = program.contract;
  * ```
  */
-export function defineProgram<P extends Program>(p: P): GetTypeProgram<P> {
+export function defineProgram<P extends Program>(p: P): TRet<GetTypeProgram<P>> {
   if (p.kind !== 'programNode') throw new Error('idl: wrong program node');
+  // Child helpers own section-specific validation; defineProgram only wires their results together.
   const types = parseDefinedTypes(p.definedTypes) as any;
   const pdas = parsePDAs(p.publicKey, p.pdas, types);
   const instructions = (parseInstructions as any)(p.instructions, types, pdas, p.publicKey);
   const accounts = defineAccounts(p.accounts, types);
-  return { name: p.name, contract: p.publicKey, types, accounts, instructions, pdas } as any;
+  return deepFreeze({
+    name: p.name,
+    contract: p.publicKey,
+    types,
+    accounts,
+    instructions,
+    pdas,
+  }) as any;
 }
 
 type IDL = {
@@ -1339,7 +1618,8 @@ type IDL = {
   readonly additionalPrograms: ArrLike<Program>;
 };
 
-type GetTypeIDL<T extends IDL> = {
+/** Type-level helper shape produced by `defineIDL(...)` for a root IDL document. */
+export type GetTypeIDL<T extends IDL> = {
   [P in T['program']['name']]: {
     program: GetTypeProgram<T['program']>;
     additionalPrograms: {
@@ -1355,6 +1635,7 @@ type GetTypeIDL<T extends IDL> = {
  * @param idl - Root IDL document.
  * @returns Object keyed by the root program name.
  * @throws If the root IDL contains malformed program definitions. {@link Error}
+ * @throws On wrong argument types. {@link TypeError}
  * @example
  * Build helpers for the root program and any additional programs declared in the IDL.
  * ```ts
@@ -1375,14 +1656,21 @@ type GetTypeIDL<T extends IDL> = {
  * const contract = idl.demo.program.contract;
  * ```
  */
-export function defineIDL<T extends IDL>(idl: T): GetTypeIDL<T> {
+export function defineIDL<T extends IDL>(idl: T): TRet<GetTypeIDL<T>> {
+  if (idl.kind !== 'rootNode') throw new Error('idl: wrong root node');
+  // Additional program names share one plain-object table under the main program.
   const res: Record<string, any> = {
     [idl.program.name]: {
       program: defineProgram(idl.program),
       additionalPrograms: {},
     },
   };
-  for (const program of idl.additionalPrograms)
+  const seen = new Set<string>();
+  for (const program of idl.additionalPrograms) {
+    if (seen.has(program.name))
+      throw new Error('duplicate additional program name: ' + program.name);
+    seen.add(program.name);
     res[idl.program.name].additionalPrograms[program.name] = defineProgram(program);
-  return res as GetTypeIDL<T>;
+  }
+  return deepFreeze(res) as TRet<GetTypeIDL<T>>;
 }

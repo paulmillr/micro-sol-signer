@@ -1,4 +1,6 @@
 import { ASSOCIATED_TOKEN_PROGRAM, Decimal, parseInstruction, SYS_PROGRAM } from './index.ts';
+import type { TArg } from '@scure/base';
+import { deepFreeze } from './idl/index.ts';
 import type { Instruction } from './index.ts';
 
 /** Token metadata used for human-readable instruction hints. */
@@ -12,6 +14,7 @@ export type TokenInfo = {
 };
 /** Mapping from token mint address to token metadata. */
 export type TokenList = Record<string, TokenInfo>;
+// Unknown mints fall back to the raw address so hints still identify the asset deterministically.
 const tokenName = (address: string, tl: TokenList) => tl[address]?.symbol || address;
 const hints: Record<
   string,
@@ -65,7 +68,9 @@ const hints: Record<
  * Produces a short human-readable description for a known instruction.
  * @param instruction - Parsed Solana instruction input.
  * @param tl - Optional token metadata used to resolve mint symbols.
- * @returns Hint string for recognized instructions, or `undefined`.
+ * @returns Hint string for recognized instructions, or `undefined` when the parsed instruction has
+ * no hint formatter.
+ * @throws If instruction validation or parsing fails. {@link Error}
  * @example
  * Turn a decoded instruction into wallet-friendly text.
  * ```ts
@@ -80,7 +85,14 @@ const hints: Record<
  * );
  * ```
  */
-export function hintInstruction(instruction: Instruction, tl: TokenList = {}) {
+export function hintInstruction(
+  instruction: TArg<Instruction>,
+  tl: TokenList = {}
+): string | undefined {
+  if (!instruction || typeof instruction !== 'object')
+    throw new Error('hintInstruction: instruction must be an object');
+  if (typeof instruction.program !== 'string')
+    throw new Error('hintInstruction: instruction program must be a string');
   const raw = parseInstruction(instruction) as any;
   const hint =
     hints[instruction.program] &&
@@ -91,19 +103,24 @@ export function hintInstruction(instruction: Instruction, tl: TokenList = {}) {
 }
 
 // https://raw.githubusercontent.com/solana-labs/token-list/main/src/tokens/solana.tokenlist.json
-/** Small built-in token list for common Solana assets. */
-export const COMMON_TOKENS: TokenList = {
+/**
+ * Small built-in token list for common Solana assets. Extend it with app-specific mints when you
+ * need broader coverage.
+ */
+export const COMMON_TOKENS: TokenList = /* @__PURE__ */ deepFreeze({
   So11111111111111111111111111111111111111112: { decimals: 9, symbol: 'SOL' }, // Wrapped SOL
   Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB: { decimals: 6, symbol: 'USDT', price: 1 },
   EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v: { decimals: 6, symbol: 'USDC', price: 1 },
   '2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo': { decimals: 6, symbol: 'PYUSD', price: 1 }, // PayPal USD
-};
+});
 
 /**
  * Resolves a token symbol into token metadata and mint address.
  * @param symbol - Token symbol to look up.
  * @param tokens - Token list to search.
  * @returns Matching token info with `contract`, or `undefined`.
+ * Returns the first matching symbol in object iteration order, so callers should avoid duplicate
+ * ticker symbols in custom token lists.
  * @example
  * Resolve a ticker symbol into the mint address and decimals used by transaction builders.
  * ```ts
@@ -111,7 +128,10 @@ export const COMMON_TOKENS: TokenList = {
  * tokenFromSymbol('USDC')?.contract;
  * ```
  */
-export function tokenFromSymbol(symbol: string, tokens = COMMON_TOKENS) {
+export function tokenFromSymbol(
+  symbol: string,
+  tokens: TokenList = COMMON_TOKENS
+): (TokenInfo & { contract: string }) | undefined {
   for (let c in tokens) if (tokens[c].symbol === symbol) return { ...tokens[c], contract: c };
   return;
 }

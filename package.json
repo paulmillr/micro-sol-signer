@@ -17,18 +17,16 @@
   },
   "devDependencies": {
     "@paulmillr/jsbt": "0.5.0",
-    "@types/node": "25.3.0",
-    "micro-ftch": "0.4.3",
-    "prettier": "3.6.2",
+    "@types/node": "25.9.0",
+    "micro-ftch": "1.0.0",
+    "prettier": "3.8.3",
     "typescript": "6.0.2"
   },
   "scripts": {
     "build": "tsc",
     "build:clean": "rm -f *.{js,d.ts,js.map,d.ts,d.ts.map}; rm -rf idl",
-    "build:release": "npx --no @paulmillr/jsbt esbuild test/build",
-    "check": "npm run check:readme && npm run check:treeshake && npm run check:jsdoc",
-    "check:treeshake": "npx --no @paulmillr/jsbt treeshake package.json test/build/out-treeshake",
-    "check:importtime": "npx --no @paulmillr/jsbt importtime package.json",
+    "build:release": "jsbt esbuild test/build",
+    "check": "jsbt check package.json",
     "format": "prettier --write src",
     "test": "node test/index.ts",
     "test:bun": "bun test/index.ts",

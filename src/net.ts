@@ -9,6 +9,8 @@ import {
   verifyTx,
 } from './index.ts';
 
+const _0n = /* @__PURE__ */ BigInt(0);
+
 // These seem official, but trigger rate-limit easily.
 // Paid one starts from $500, self-hosted will require 100+ TBs of storage.
 /** Default Solana mainnet RPC URL. */
@@ -33,7 +35,7 @@ export type AccountInfo = {
   lamports: bigint;
   /** Owning program address. */
   owner: string;
-  /** Rent epoch from RPC. */
+  /** Rent epoch from RPC. Large sentinel epochs may already be rounded by JSON parsing. */
   rentEpoch: number;
   /** Raw account data bytes. */
   data: Uint8Array;
@@ -110,32 +112,89 @@ type RawTokenBalance = {
 };
 
 function mapToken(item: RawTokenBalance, keys: string[]) {
+  if (!item || typeof item !== 'object') throw new Error('txInfo: expected token balance object');
+  // RPC token balances point into raw transaction keys; reject malformed metadata first.
+  if (
+    !Number.isSafeInteger(item.accountIndex) ||
+    item.accountIndex < 0 ||
+    item.accountIndex >= keys.length
+  ) {
+    throw new Error('txInfo: token balance accountIndex exceeds account keys');
+  }
+  if (typeof item.mint !== 'string') throw new Error('txInfo: token mint must be a string');
+  if (item.owner !== undefined && typeof item.owner !== 'string')
+    throw new Error('txInfo: token owner must be a string');
+  const uiTokenAmount = item.uiTokenAmount;
+  if (!uiTokenAmount || typeof uiTokenAmount !== 'object')
+    throw new Error('txInfo: expected token amount object');
   return {
     address: keys[item.accountIndex],
     contract: item.mint,
     owner: item.owner,
-    amount: BigInt(item.uiTokenAmount.amount),
-    decimals: item.uiTokenAmount.decimals,
+    amount: safeRpcBigint(uiTokenAmount.amount, 'txInfo: token amount'),
+    decimals: safeRpcTokenDecimals(uiTokenAmount.decimals, 'txInfo: token decimals'),
   };
 }
 
+function safeRpcInteger(value: number, name: string) {
+  // These RPC fields are non-negative counters/balances; reject bad signs before bigint conversion.
+  if (value < 0) throw new Error(`${name} must be non-negative`);
+  // RPC JSON integers above JS's safe range may already be rounded before bigint conversion.
+  if (!Number.isSafeInteger(value)) throw new Error(`${name} exceeds safe integer range`);
+  return value;
+}
+
+function safeRpcBigint(value: string, name: string) {
+  // RPC token amounts are decimal strings; BigInt() also accepts empty, signed, and whitespace
+  // strings.
+  if (typeof value !== 'string' || !/^\d+$/.test(value)) {
+    throw new Error(`${name} must be an unsigned integer string`);
+  }
+  return BigInt(value);
+}
+
+function safeRpcTokenDecimals(value: number, name: string) {
+  // SPL token decimals are stored as a u8 mint field; reject malformed parsed-RPC metadata.
+  if (!Number.isSafeInteger(value) || value < 0 || value > 255) {
+    throw new Error(`${name} must be an unsigned 8-bit integer`);
+  }
+  return value;
+}
+
+function tokenAccountPubkey(item: any, name: string) {
+  if (!item || typeof item !== 'object') throw new Error(`${name}: expected token account object`);
+  // Parsed token-account entries are later used as addresses, so reject bad pubkeys before RPC
+  // calls or public balances.
+  if (typeof item.pubkey !== 'string')
+    throw new Error(`${name}: token account pubkey must be a string`);
+  return item.pubkey;
+}
+
 type RawTxInfo = {
-  blockTime: number;
+  blockTime: number | null;
   meta: {
-    logMessages: string[];
+    logMessages: string[] | null;
     err: object | null;
     fee: number;
     innerInstructions: [];
     postBalances: number[];
-    postTokenBalances: RawTokenBalance[];
+    postTokenBalances: RawTokenBalance[] | null;
     preBalances: number[];
-    preTokenBalances: RawTokenBalance[];
+    preTokenBalances: RawTokenBalance[] | null;
     rewards: RawReward[];
     status: { Ok: null }; // Deprecated
   };
   slot: number;
   transaction: Data;
 };
+
+function rpcValue(res: any, method: string) {
+  // These RPC helpers intentionally return result.value; missing wrappers should not fail as raw
+  // property reads.
+  if (!res || typeof res !== 'object' || !('value' in res))
+    throw new Error(`${method}: expected RPC value wrapper`);
+  return res.value;
+}
 
 /** Token balance info for a wallet-owned token account. */
 export type TokenBalance = Partial<TokenInfo> & {
@@ -216,6 +275,7 @@ export type TxTransfers = {
 
 // smallest first
 function sortMulti<T>(lst: T[], ...keys: (keyof T)[]): T[] {
+  // Sort in place; current callers hand over fresh arrays right before normalizing RPC order.
   return lst.sort((a, b) => {
     for (const k of keys) {
       if (a[k] < b[k]) return -1;
@@ -229,11 +289,26 @@ type Encoding = 'base58' | 'base64' | 'base64+zstd' | 'jsonParsed';
 type Data = [string, Encoding] | object;
 
 function decodeData(data: Data) {
+  // jsonParsed payloads are already structured objects; tuple payloads are only decoded for
+  // base64/base58 because current RPC callers never request base64+zstd.
   if (!Array.isArray(data)) return data; // json
   const [_data, encoding] = data;
   if (encoding === 'base64') return base64.decode(_data);
   if (encoding === 'base58') return base58.decode(_data);
   throw new Error('unsupported encoding');
+}
+function decodeBytes(data: Data, name: string) {
+  const bytes = decodeData(data);
+  // These callers requested binary RPC data; parsed objects would violate the public Uint8Array
+  // contract.
+  if (!(bytes instanceof Uint8Array)) throw new Error(`${name} expected binary data`);
+  return bytes;
+}
+function optionalRpcArray<T>(value: T[] | null | undefined, name: string): T[] {
+  // Agave/Solana can emit null for optional transaction metadata arrays when recording is disabled.
+  if (value === null || value === undefined) return [];
+  if (!Array.isArray(value)) throw new Error(`${name} must be an array`);
+  return value;
 }
 
 /**
@@ -252,6 +327,8 @@ function decodeData(data: Data) {
 export class ArchiveNodeProvider {
   private rpc: JsonrpcInterface;
   constructor(rpc: JsonrpcInterface) {
+    // Keep the caller's transport object by reference so every helper shares the same batching,
+    // retry, and caching policy.
     this.rpc = rpc;
   }
   private async base64Call(method: string, ...params: any[]): Promise<any | undefined> {
@@ -259,14 +336,18 @@ export class ArchiveNodeProvider {
       encoding: 'base64',
       commitment: 'confirmed',
     });
-    return res.value;
+    // This helper intentionally returns only result.value; callers that need RPC context metadata
+    // (for example slot) must use rpc.call directly.
+    return rpcValue(res, method);
   }
   private async jsonCall(method: string, ...params: any[]): Promise<any | undefined> {
     const res = await this.rpc.call(method, ...params, {
       encoding: 'jsonParsed',
       commitment: 'confirmed',
     });
-    return res.value;
+    // Request parsed account JSON and return only result.value; callers that need RPC context
+    // metadata must use rpc.call directly.
+    return rpcValue(res, method);
   }
   /**
    * Requests airdrop SOL for tests (testnet)
@@ -274,8 +355,18 @@ export class ArchiveNodeProvider {
    * @param amount - Lamport amount.
    * @returns RPC airdrop result.
    */
-  airdrop(to: string, amount: bigint): Promise<any> {
-    return this.base64Call('requestAirdrop', to, Number(amount));
+  async airdrop(to: string, amount: bigint): Promise<any> {
+    // Keep validation failures as promise rejections, matching the other async provider helpers.
+    if (typeof to !== 'string')
+      throw new TypeError(`airdrop: expected address string, got ${typeof to}`);
+    // RPC requests still need JSON numbers; reject bigint values that would round during
+    // Number(...).
+    if (amount < _0n) throw new Error('airdrop: amount must be non-negative');
+    const num = Number(amount);
+    if (!Number.isSafeInteger(num) || BigInt(num) !== amount) {
+      throw new Error('airdrop: amount exceeds safe integer range');
+    }
+    return this.base64Call('requestAirdrop', to, num);
   }
   /**
    * Returns all information associated with the account of provided address
@@ -286,12 +377,25 @@ export class ArchiveNodeProvider {
       throw new TypeError(`accountInfo: expected address string, got ${typeof address}`);
     const res = await this.base64Call('getAccountInfo', address);
     if (res === null) return undefined;
-    const data = decodeData(res.data);
+    // Null is the only valid missing-account sentinel; other malformed values must not be
+    // dereferenced.
+    if (!res || typeof res !== 'object' || Array.isArray(res))
+      throw new Error('accountInfo: expected account object');
+    const data = decodeBytes(res.data, 'accountInfo:');
+    // AccountInfo is a public typed object; reject malformed RPC metadata instead of coercing it.
+    if (typeof res.owner !== 'string') throw new Error('accountInfo: owner must be a string');
+    if (typeof res.rentEpoch !== 'number')
+      throw new Error('accountInfo: rentEpoch must be a number');
+    if (typeof res.executable !== 'boolean')
+      throw new Error('accountInfo: executable must be boolean');
     return {
-      lamports: BigInt(res.lamports),
+      // Lamports are wallet/accounting data; reject unsafe JSON numbers before bigint conversion.
+      lamports: BigInt(safeRpcInteger(res.lamports, 'accountInfo: lamports')),
       owner: res.owner,
+      // Keep rentEpoch as RPC metadata; Solana sentinel epochs can exceed JS's safe range and
+      // arrive already rounded.
       rentEpoch: res.rentEpoch,
-      data: data as Uint8Array,
+      data,
       exec: !!res.executable,
     };
   }
@@ -300,7 +404,8 @@ export class ArchiveNodeProvider {
    * @param mint - Token mint address.
    * @param address - Token-account address to check.
    * @param owner - Optional owner address that must match the token account.
-   * @returns `true` when the account matches the expected token-account shape.
+   * @returns `true` only for initialized legacy `TOKEN_PROGRAM` accounts in the fixed 165-byte base
+   * layout; Token-2022, extension-bearing, or frozen accounts return `false`.
    */
   async isValidTokenAccount(mint: string, address: string, owner?: string): Promise<boolean> {
     const info = await this.accountInfo(address);
@@ -321,7 +426,9 @@ export class ArchiveNodeProvider {
   /**
    * Returns minimum balance required to make account rent exempt.
    * @param size - Account data length in bytes.
-   * @returns Minimum lamport balance required for rent exemption.
+   * @returns Minimum lamport balance required for rent exemption exactly as returned by the
+   * JSON-RPC transport; this helper validates `size` but does not normalize the RPC result to
+   * `bigint`.
    */
   minBalance(size: number): Promise<any> {
     if (typeof size !== 'number')
@@ -330,23 +437,57 @@ export class ArchiveNodeProvider {
       throw new RangeError(`minBalance: wrong size=${size}`);
     return this.rpc.call('getMinimumBalanceForRentExemption', size);
   }
+  private async recentBlockHashInfo(name: string): Promise<RecentBlockhash> {
+    const res = await this.base64Call('getRecentBlockhash');
+    // This response feeds public transaction construction, so reject malformed metadata before
+    // callers consume it.
+    if (!res || typeof res !== 'object') throw new Error(`${name}: expected object`);
+    if (typeof res.blockhash !== 'string') throw new Error(`${name}: blockhash must be a string`);
+    if (!res.feeCalculator || typeof res.feeCalculator !== 'object')
+      throw new Error(`${name}: feeCalculator must be an object`);
+    if (typeof res.feeCalculator.lamportsPerSignature !== 'number')
+      throw new Error(`${name}: lamportsPerSignature must be a number`);
+    // This public response exposes fee metadata directly, so apply the same non-negative
+    // safe-integer guard as fee().
+    safeRpcInteger(res.feeCalculator.lamportsPerSignature, `${name}: lamportsPerSignature`);
+    return res;
+  }
   /**
    * Recent blockhash and fee information
+   * @returns Legacy `getRecentBlockhash` response with `blockhash` and `feeCalculator`; callers
+   * that need newer fields such as `lastValidBlockHeight` or RPC context metadata must use
+   * `rpc.call(...)` directly.
    */
-  recentBlockHash(): Promise<RecentBlockhash> {
-    return this.base64Call('getRecentBlockhash');
+  async recentBlockHash(): Promise<RecentBlockhash> {
+    return this.recentBlockHashInfo('recentBlockHash');
   }
+  /**
+   * Returns `context.slot` from a raw `getRecentBlockhash` call because `recentBlockHash()`
+   * intentionally drops the surrounding RPC metadata; malformed unsafe slot numbers are rejected.
+   */
   async height(): Promise<number> {
     const res = await this.rpc.call('getRecentBlockhash');
-    return res.context.slot;
+    // This path consumes raw RPC context metadata rather than result.value; guard it before reading
+    // slot.
+    if (!res || typeof res !== 'object' || !res.context || typeof res.context !== 'object')
+      throw new Error('height: expected context object');
+    if (typeof res.context.slot !== 'number') throw new Error('height: slot must be a number');
+    return safeRpcInteger(res.context.slot, 'height: slot');
   }
   /**
    * Latest fee (lamports per signature)
+   * Converts the legacy `recentBlockHash().feeCalculator.lamportsPerSignature` number into
+   * `bigint`; malformed unsafe fee numbers are rejected before conversion.
    */
   async fee(): Promise<bigint> {
-    return BigInt((await this.recentBlockHash()).feeCalculator.lamportsPerSignature);
+    const fee = (await this.recentBlockHashInfo('fee')).feeCalculator.lamportsPerSignature;
+    return BigInt(fee);
   }
-  async getAddressLookupTable(address: string) {
+  /**
+   * @returns Decoded lookup-table account data. Missing accounts and non-ALT owners both throw
+   * `wrong contract`; callers that need to distinguish the cases must use `accountInfo()` directly.
+   */
+  async getAddressLookupTable(address: string): Promise<ReturnType<typeof AddressTableLookupData>> {
     const res = await this.accountInfo(address);
     if (!res || res.owner !== 'AddressLookupTab1e1111111111111111111111111')
       throw new Error('wrong contract');
@@ -355,6 +496,8 @@ export class ArchiveNodeProvider {
   /**
    * Returns account balance and latest blockhash (required to create new transaction)
    * @param address - Solana address.
+   * @returns Native SOL balance state for `address`; missing accounts still return `balance: 0n`,
+   * `active: false`, and a fresh blockhash so callers can fund or create the account.
    */
   async unspent(address: string): Promise<Unspent> {
     if (typeof address !== 'string')
@@ -375,7 +518,9 @@ export class ArchiveNodeProvider {
    * Returns information about token accounts for address
    * @param address - Solana address.
    * @param tokensInfo - Token metadata keyed by mint address, such as `COMMON_TOKENS`.
-   * @returns Token balances for the owner's token accounts.
+   * @returns Legacy SPL Token balances for the owner's token accounts, sorted by mint and
+   * token-account address. Token-2022 accounts are not included, and unknown mints keep metadata
+   * fields undefined.
    */
   async tokenBalances(
     address: string,
@@ -389,44 +534,111 @@ export class ArchiveNodeProvider {
     if (!Array.isArray(tokens)) throw new Error('sol.unspent: incorrect tokens value');
     const res: TokenBalance[] = [];
     for (const t of tokens) {
-      const i = t.account.data.parsed.info;
+      const pubkey = tokenAccountPubkey(t, 'tokenBalances');
+      const account = t.account;
+      const data = account && account.data;
+      const parsed = data && data.parsed;
+      const i = parsed && parsed.info;
+      if (!i || typeof i !== 'object')
+        throw new Error('tokenBalances: expected parsed token account info');
+      if (typeof i.mint !== 'string') throw new Error('tokenBalances: token mint must be a string');
+      if (!i.tokenAmount || typeof i.tokenAmount !== 'object')
+        throw new Error('tokenBalances: expected token amount object');
       res.push({
         ...tokensInfo[i.mint],
         contract: i.mint,
-        decimals: i.tokenAmount.decimals,
-        balance: BigInt(i.tokenAmount.amount),
-        tokenAccount: t.pubkey,
+        decimals: safeRpcTokenDecimals(i.tokenAmount.decimals, 'tokenBalances: token decimals'),
+        balance: safeRpcBigint(i.tokenAmount.amount, 'tokenBalances: token amount'),
+        tokenAccount: pubkey,
       });
     }
     return sortMulti(res, 'contract', 'tokenAccount'); // node returns random order by default
   }
+  /**
+   * @returns Transfer view reconstructed from raw transaction bytes plus RPC balance metadata. RPC
+   * token-balance `accountIndex` values must resolve against the raw message keys, and lamport
+   * balance numbers must fit JS's safe integer range before bigint conversion.
+   */
   private async txInfo(signature: string): Promise<TxTransfers> {
-    // json and jsonParsed returns parsed instructions data, it is hard to re-build actual raw tx from it
-    // base64 doesn't return accountKeys (needed for balances), but we can get it from parsing raw tx
+    // json and jsonParsed returns parsed instructions data, it is hard to re-build actual raw tx
+    // from it
+    // base64 doesn't return accountKeys (needed for balances), but we can get it from parsing raw
+    // tx
     // NOTE: we support only legacy transactions for now (no versioned).
     const tx: RawTxInfo = await this.rpc.call('getTransaction', signature, {
       encoding: 'base64',
       commitment: 'confirmed',
       maxSupportedTransactionVersion: 0,
     });
-    const rawBytes = decodeData(tx.transaction) as Uint8Array;
+    // Archive providers may return null for pruned or unavailable transactions; fail before
+    // dereferencing the RPC result.
+    if (!tx || typeof tx !== 'object') throw new Error('txInfo: missing transaction');
+    // Some RPC responses can carry raw transaction bytes without balance metadata; this parser
+    // needs both.
+    if (!tx.meta || typeof tx.meta !== 'object')
+      throw new Error('txInfo: missing transaction metadata');
+    const rawBytes = decodeBytes(tx.transaction, 'txInfo: transaction');
     verifyTx(rawBytes);
     const rawTx = TransactionRaw.decode(rawBytes);
     const keys = rawTx.msg.data.keys;
+    // Slot and fee are accounting metadata too; unsafe JSON numbers may already be rounded.
+    const block = safeRpcInteger(tx.slot, 'txInfo: slot');
+    const fee = safeRpcInteger(tx.meta.fee, 'txInfo: fee');
+    const timestamp =
+      // `getTransaction.blockTime` is nullable; keep an absent RPC timestamp absent instead of
+      // turning it into UNIX epoch 0.
+      tx.blockTime === null
+        ? undefined
+        : safeRpcInteger(
+            safeRpcInteger(tx.blockTime, 'txInfo: blockTime') * 1000,
+            'txInfo: timestamp'
+          );
+    const logMessages = optionalRpcArray(tx.meta.logMessages, 'txInfo: logMessages');
+    for (const msg of logMessages) {
+      // `info.log` is public `string[]`; malformed RPC arrays must not leak non-string entries.
+      if (typeof msg !== 'string') throw new Error('txInfo: logMessages item must be a string');
+    }
+    // Missing status metadata would otherwise be misreported as a reverted transaction.
+    if (tx.meta.err === undefined) throw new Error('txInfo: transaction error status missing');
+    const reverted = tx.meta.err !== null;
+    const preTokenBalances = optionalRpcArray(tx.meta.preTokenBalances, 'txInfo: preTokenBalances');
+    const postTokenBalances = optionalRpcArray(
+      tx.meta.postTokenBalances,
+      'txInfo: postTokenBalances'
+    );
+    // Balance metadata is account-key indexed; extra entries would be silently dropped by the
+    // transfer diff loop.
+    if (!Array.isArray(tx.meta.postBalances) || tx.meta.postBalances.length !== keys.length)
+      throw new Error('txInfo: postBalances length does not match account keys');
+    if (!Array.isArray(tx.meta.preBalances) || tx.meta.preBalances.length !== keys.length)
+      throw new Error('txInfo: preBalances length does not match account keys');
     const transfers = [];
     for (let i = 0; i < keys.length; i++) {
       const address = keys[i];
-      const diff = BigInt(tx.meta.postBalances[i] - tx.meta.preBalances[i]);
-      if (diff === 0n) continue;
-      transfers.push(diff < 0n ? { from: address, value: -diff } : { to: address, value: diff });
+      const post = safeRpcInteger(tx.meta.postBalances[i], 'txInfo: post balance');
+      const pre = safeRpcInteger(tx.meta.preBalances[i], 'txInfo: pre balance');
+      const diff = BigInt(post) - BigInt(pre);
+      if (diff === _0n) continue;
+      transfers.push(diff < _0n ? { from: address, value: -diff } : { to: address, value: diff });
     }
     const tokenBalances: Record<string, Omit<ReturnType<typeof mapToken>, 'address'>> = {};
-    for (const pre of tx.meta.preTokenBalances) {
+    const seenTokenIndex = (seen: Set<number>, item: RawTokenBalance, name: string) => {
+      // Each RPC token-balance snapshot is keyed by transaction accountIndex; duplicates would
+      // overwrite or double-count deltas.
+      if (seen.has(item.accountIndex)) throw new Error(`txInfo: duplicate ${name} accountIndex`);
+      seen.add(item.accountIndex);
+    };
+    const preTokenIndexes = new Set<number>();
+    for (const pre of preTokenBalances) {
       const { address, ...rest } = mapToken(pre, keys);
-      tokenBalances[address] = rest;
+      seenTokenIndex(preTokenIndexes, pre, 'preTokenBalances');
+      // Token deltas are post - pre; pre-only balances are debits when token accounts disappear.
+      tokenBalances[address] = { ...rest, amount: -rest.amount };
     }
-    for (const post of tx.meta.postTokenBalances) {
+    const postTokenIndexes = new Set<number>();
+    for (const post of postTokenBalances) {
       const { address, ...rest } = mapToken(post, keys);
+      seenTokenIndex(postTokenIndexes, post, 'postTokenBalances');
       if (!tokenBalances[address]) tokenBalances[address] = rest;
       else {
         const pre = tokenBalances[address];
@@ -434,35 +646,40 @@ export class ArchiveNodeProvider {
         if (pre.contract !== rest.contract) throw new Error('txInfo: token contract changed');
         if (pre.owner !== rest.owner) throw new Error('txInfo: token owner changed');
         if (pre.decimals !== rest.decimals) throw new Error('txInfo: token decimals changed');
-        pre.amount = rest.amount - pre.amount;
+        pre.amount += rest.amount;
       }
     }
     const tokenTransfers = [];
     for (const tokenAccount in tokenBalances) {
       const { amount, ...rest } = tokenBalances[tokenAccount];
-      if (amount === 0n) continue;
+      if (amount === _0n) continue;
 
       tokenTransfers.push(
-        amount < 0n
+        amount < _0n
           ? { from: tokenAccount, value: -amount, ...rest }
           : { to: tokenAccount, value: amount, ...rest }
       );
     }
     return {
       hash: signature,
-      timestamp: tx.blockTime * 1000,
-      block: tx.slot,
+      ...(timestamp === undefined ? {} : { timestamp }),
+      block,
       transfers,
       tokenTransfers,
-      reverted: tx.meta.err !== null,
+      reverted,
       info: {
-        log: tx.meta.logMessages,
+        log: logMessages,
         raw: base64.encode(rawBytes),
-        fee: BigInt(tx.meta.fee),
+        fee: BigInt(fee),
       },
     };
   }
   // Only returns transactions for address, but not for owned accounts (tokens)
+  /**
+   * Pages `getSignaturesForAddress` by advancing `before` with the oldest signature from each
+   * fetched batch. Callbacks therefore observe signatures sorted within each batch, but not
+   * necessarily in one global chronological order across multiple pages.
+   */
   private async addressTransactions(
     address: string,
     cb: (signature: string) => void,
@@ -476,7 +693,14 @@ export class ArchiveNodeProvider {
         limit: perRequest,
         before: lastTx,
       });
+      // A malformed list must not look like a clean pagination terminator.
+      if (!Array.isArray(data)) throw new Error('addressTransactions: incorrect signatures value');
       if (!data.length) break;
+      for (const item of data) {
+        // Missing signatures leave before=undefined, which can make pagination repeat forever.
+        if (!item || typeof item.signature !== 'string')
+          throw new Error('addressTransactions: expected signature string');
+      }
       sortMulti(data, 'slot', 'blockTime');
       lastTx = data[0].signature;
       for (const { signature } of data) cb(signature);
@@ -485,6 +709,10 @@ export class ArchiveNodeProvider {
   /**
    * Returns all transaction information for address.
    * @param address - Solana address.
+   * @returns Transfer summaries for `address` plus any legacy SPL Token accounts returned by
+   * `getTokenAccountsByOwner`. Duplicate signatures are fetched once and the final array is
+   * sorted by `block`/`hash`; transaction parsing still inherits `txInfo()`'s RPC-metadata
+   * validation and numeric limits.
    */
   async transfers(address: string, perRequest = 1000): Promise<TxTransfers[]> {
     if (typeof address !== 'string')
@@ -502,14 +730,33 @@ export class ArchiveNodeProvider {
     const tokens: TokenAccountsOwner[] = await this.jsonCall('getTokenAccountsByOwner', address, {
       programId: TOKEN_PROGRAM,
     });
+    if (!Array.isArray(tokens)) {
+      await pMain;
+      throw new Error('transfers: incorrect tokens value');
+    }
+    const tokenAddresses = [];
+    for (const token of tokens) {
+      try {
+        tokenAddresses.push(tokenAccountPubkey(token, 'transfers'));
+      } catch (e) {
+        await pMain;
+        throw e;
+      }
+    }
     await Promise.all([
       pMain,
-      ...tokens.map((i) => this.addressTransactions(i.pubkey, fetchTx, perRequest)),
+      ...tokenAddresses.map((token) => this.addressTransactions(token, fetchTx, perRequest)),
     ]);
     const txs = await Promise.all(Object.values(txPromises));
     sortMulti(txs, 'block', 'hash');
     return txs;
   }
+  /**
+   * Broadcasts an already-base64-encoded transaction string.
+   * @param tx - Base64 transaction bytes, usually from `createTx()` or `signTx()`.
+   * @returns Raw `sendTransaction` result from the transport. The helper forwards `tx`
+   * unchanged with `encoding: 'base64'` and does not run local preflight or runtime validation.
+   */
   async sendTx(tx: string): Promise<any> {
     return await this.rpc.call('sendTransaction', tx, { encoding: 'base64' });
   }
@@ -527,7 +774,8 @@ export type Balances = {
  * Also, useful as a sanity check in case we've missed something.
  * Info from multiple addresses can be merged (sort everything first).
  * @param transfers - Sorted transaction summaries.
- * @returns Transactions annotated with running balances.
+ * @returns New transaction objects annotated with running balances. The helper leaves the
+ * caller's transaction entries unchanged.
  * @example
  * Fold sorted transfers into running native and token balances.
  * ```ts
@@ -546,14 +794,15 @@ export type Balances = {
 export function calcTransfersDiff(transfers: TxTransfers[]): (TxTransfers & Balances)[] {
   const balances: Record<string, bigint> = {};
   const tokenBalances: Record<string, Record<string, bigint>> = {};
+  const res: (TxTransfers & Balances)[] = [];
   for (const t of transfers) {
     for (const it of t.transfers) {
       if (it.from) {
-        if (balances[it.from] === undefined) balances[it.from] = 0n;
+        if (balances[it.from] === undefined) balances[it.from] = _0n;
         balances[it.from] -= it.value;
       }
       if (it.to) {
-        if (balances[it.to] === undefined) balances[it.to] = 0n;
+        if (balances[it.to] === undefined) balances[it.to] = _0n;
         balances[it.to] += it.value;
       }
     }
@@ -561,15 +810,21 @@ export function calcTransfersDiff(transfers: TxTransfers[]): (TxTransfers & Bala
       if (!tokenBalances[tt.contract]) tokenBalances[tt.contract] = {};
       const token = tokenBalances[tt.contract];
       if (tt.from) {
-        if (token[tt.from] === undefined) token[tt.from] = 0n;
+        if (token[tt.from] === undefined) token[tt.from] = _0n;
         token[tt.from] -= tt.value;
       }
       if (tt.to) {
-        if (token[tt.to] === undefined) token[tt.to] = 0n;
+        if (token[tt.to] === undefined) token[tt.to] = _0n;
         token[tt.to] += tt.value;
       }
     }
-    Object.assign(t, {
+    // Keep caller transactions immutable; only the derived snapshot annotations are new.
+    res.push({
+      ...t,
+      // Returned annotations should not expose nested caller-owned arrays for later mutation.
+      transfers: t.transfers.map((transfer) => ({ ...transfer })),
+      tokenTransfers: t.tokenTransfers.map((transfer) => ({ ...transfer })),
+      info: { ...t.info, log: t.info.log.slice() },
       balances: { ...balances },
       // deep copy
       tokenBalances: Object.fromEntries(
@@ -577,5 +832,5 @@ export function calcTransfersDiff(transfers: TxTransfers[]): (TxTransfers & Bala
       ),
     });
   }
-  return transfers as (TxTransfers & Balances)[];
+  return res;
 }

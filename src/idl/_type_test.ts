@@ -1,10 +1,63 @@
 import * as P from 'micro-packed';
 import * as idl from './index.ts';
 import * as sol from '../index.ts';
+import { Offchain } from '../offchain.ts';
 import TokenIDL from './token.ts';
 
 // Basic
 const assertType = <T>(_value: T) => {};
+type NarrowBytes = ReturnType<typeof Uint8Array.of>;
+const broadBytes = undefined as unknown as Uint8Array<ArrayBufferLike>;
+const typeTestAddress = '11111111111111111111111111111111';
+const typeTestRawMessage = {
+  TAG: 'legacy' as const,
+  data: {
+    header: { requiredSignatures: 0, readSigned: 0, readUnsigned: 1 },
+    keys: [typeTestAddress],
+    blockhash: typeTestAddress,
+    instructions: [],
+  },
+};
+const typeTestMessage = {
+  version: 'legacy' as const,
+  feePayer: typeTestAddress,
+  blockhash: typeTestAddress,
+  instructions: [],
+};
+
+assertType<NarrowBytes>(idl.pubKey.encode(typeTestAddress));
+assertType<NarrowBytes>(sol.MessageRaw.encode(typeTestRawMessage));
+assertType<NarrowBytes>(sol.Message.encode(typeTestMessage));
+assertType<NarrowBytes>(sol.TransactionRaw.encode({ signatures: [], msg: typeTestRawMessage }));
+assertType<NarrowBytes>(sol.Transaction.encode({ msg: typeTestMessage, signatures: {} }));
+assertType<NarrowBytes>(Offchain.Message.encode({ version: 0, msg: 'hello' }));
+sol.MessageRaw.decode(broadBytes);
+Offchain.MessageRaw.decode(broadBytes);
+const typeTestBytesCoder = idl.mapType({ kind: 'bytesTypeNode' }, {});
+assertType<NarrowBytes>(typeTestBytesCoder.encode(broadBytes));
+assertType<NarrowBytes>(typeTestBytesCoder.decode(broadBytes));
+const typeTestIDL = idl.defineIDL({
+  kind: 'rootNode',
+  program: {
+    kind: 'programNode',
+    name: 'demo',
+    publicKey: typeTestAddress,
+    definedTypes: [],
+    pdas: [],
+    instructions: [],
+    accounts: [
+      {
+        kind: 'accountNode',
+        name: 'bytes',
+        data: { kind: 'bytesTypeNode' },
+        discriminators: [],
+      },
+    ],
+  },
+  additionalPrograms: [],
+});
+assertType<NarrowBytes>(typeTestIDL.demo.program.accounts.coders.bytes.encode(broadBytes));
+assertType<NarrowBytes>(typeTestIDL.demo.program.accounts.coders.bytes.decode(broadBytes));
 
 assertType<number>(
   1 as any as idl.GetType<{
@@ -124,6 +177,31 @@ const accounts = [
 ] as const;
 
 export type t4 = idl.GetTypeAccounts<typeof accounts>;
+const accountValueAccounts = [
+  {
+    kind: 'instructionAccountNode',
+    name: 'authority',
+    isWritable: false,
+    isSigner: true,
+    isOptional: false,
+  },
+  {
+    kind: 'instructionAccountNode',
+    name: 'payer',
+    isWritable: true,
+    isSigner: true,
+    isOptional: false,
+    defaultValue: { kind: 'accountValueNode', name: 'authority' },
+  },
+] as const;
+const accountValueInput = 1 as unknown as idl.GetTypeAccounts<typeof accountValueAccounts>;
+assertType<{
+  authority: string;
+  payer: undefined;
+}>(accountValueInput);
+assertType<idl.Nullable<idl.GetTypeAccounts<typeof accountValueAccounts>>>({
+  authority: '11111111111111111111111111111111',
+});
 
 const instruction = {
   kind: 'instructionNode',
@@ -262,12 +340,14 @@ type t13 = t11['encoders']['transferChecked'];
 let b = (1 as unknown as t12)(1 as any);
 b;
 let a = 1 as any as t13;
+const _1n = /* @__PURE__ */ BigInt(1);
+const _123n = /* @__PURE__ */ BigInt(123);
 a({
   source: '7o36UsWR1JQLpZ9PE2gn9L4SQ69CNNiWAXd4Jt7rqz9Z',
   mint: 'DShWnroshVbeUp28oopA3Pu7oFPDBtC1DBmPECXXAQ9n',
   destination: 'Hozo7TadHq6PMMiGLGNvgk79Hvj5VTAM7Ny2bamQ2m8q',
   authority: '3ECJhLBQ9DAuKBKNjQGLEk3YqoFcF1YvhdayQ2C96eXF',
-  amount: 123n,
+  amount: _123n,
   decimals: 10,
 });
 
@@ -281,10 +361,10 @@ let a2 = 1 as any as t23;
 a2({
   owner: '1',
   mint: '1',
-  amount: 1n,
+  amount: _1n,
   closeAuthority: '1',
   delegate: '1',
-  delegatedAmount: 1n,
+  delegatedAmount: _1n,
   isNative: undefined,
   state: { TAG: 'initialized' },
 });
@@ -295,14 +375,14 @@ t33.instructions.encoders.transferChecked({
   mint: 'DShWnroshVbeUp28oopA3Pu7oFPDBtC1DBmPECXXAQ9n',
   destination: 'Hozo7TadHq6PMMiGLGNvgk79Hvj5VTAM7Ny2bamQ2m8q',
   authority: '3ECJhLBQ9DAuKBKNjQGLEk3YqoFcF1YvhdayQ2C96eXF',
-  amount: 123n,
+  amount: _123n,
   decimals: 10,
 });
 sol.createTokenTransferChecked(
   'So11111111111111111111111111111111111111112',
   '11111111111111111111111111111111',
   'FDwkzWGxx6LfCfzcmVVLEk3QUMxNhuFuKEMRwzR4Dtys',
-  123n,
+  _123n,
   4,
   'J2BjKU6L83eehHVgoze6uTXGCBu6nbxsqEro9QvWpU52'
 );
@@ -335,7 +415,7 @@ assertType<number[]>(
     item: { kind: 'numberTypeNode'; format: 'u32'; endian: 'le' };
   }>
 );
-assertType<Map<string, number>>(
+assertType<Record<string, number>>(
   1 as any as idl.GetType<{
     kind: 'mapTypeNode';
     key: { kind: 'fixedSizeTypeNode'; size: 3; type: { kind: 'stringTypeNode' } };
@@ -344,6 +424,14 @@ assertType<Map<string, number>>(
       kind: 'prefixedCountNode';
       prefix: { kind: 'numberTypeNode'; format: 'u32'; endian: 'le' };
     };
+  }>
+);
+assertType<Record<string, number>>(
+  1 as any as idl.GetType<{
+    kind: 'mapTypeNode';
+    key: { kind: 'numberTypeNode'; format: 'u8'; endian: 'le' };
+    value: { kind: 'numberTypeNode'; format: 'u16'; endian: 'le' };
+    count: { kind: 'fixedCountNode'; value: 2 };
   }>
 );
 assertType<{

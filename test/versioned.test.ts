@@ -1,6 +1,6 @@
 import { describe, should } from '@paulmillr/jsbt/test.js';
 import { base64 } from '@scure/base';
-import { deepStrictEqual } from 'node:assert';
+import { deepStrictEqual, throws } from 'node:assert';
 import * as sol from '../src/index.ts';
 
 describe('Solana', () => {
@@ -13,6 +13,81 @@ describe('Solana', () => {
     const msgBytes = sol.MessageRaw.encode(msg);
     deepStrictEqual(sol.Message.encode(sol.Message.decode(msgBytes)), msgBytes);
     deepStrictEqual(sol.Transaction.encode(sol.Transaction.decode(TX)), TX);
+  });
+  should('duplicate ALT accounts upgrade to writable', () => {
+    const table = '46EcyAncfyhxH1ZuT2nbSVdtL5rna4uKQyWQ2nMMjp8N';
+    const msg = {
+      version: 0,
+      feePayer: '11111111111111111111111111111111',
+      blockhash: '11111111111111111111111111111111',
+      instructions: [
+        {
+          program: '11111111111111111111111111111111',
+          keys: [
+            { address: `${table}:1`, sign: false, write: false },
+            { address: `${table}:1`, sign: false, write: true },
+          ],
+          data: Uint8Array.of(1),
+        },
+      ],
+    } as const;
+    deepStrictEqual(sol.Message.decode(sol.Message.encode(msg)).instructions[0].keys, [
+      { address: `${table}:1`, sign: false, write: true },
+      { address: `${table}:1`, sign: false, write: true },
+    ]);
+  });
+  should('AddressLookupTables mapping does not alias transaction bytes', () => {
+    const table = '46EcyAncfyhxH1ZuT2nbSVdtL5rna4uKQyWQ2nMMjp8N';
+    const feePayer = '11111111111111111111111111111111';
+    const address = '3gqrRcuQ8xprBhymXS1FctNxi8hbw3bz5EgKBUgSWiQH';
+    const tx = {
+      signatures: { [feePayer]: new Uint8Array(64) },
+      msg: {
+        version: 0,
+        feePayer,
+        blockhash: '11111111111111111111111111111111',
+        instructions: [
+          {
+            program: feePayer,
+            keys: [{ address, sign: false, write: false }],
+            data: Uint8Array.of(1, 2, 3),
+          },
+        ],
+      },
+    };
+    const original = {
+      signatures: { [feePayer]: new Uint8Array(64) },
+      msg: {
+        version: 0,
+        feePayer,
+        blockhash: '11111111111111111111111111111111',
+        instructions: [
+          {
+            program: feePayer,
+            keys: [{ address, sign: false, write: false }],
+            data: Uint8Array.of(1, 2, 3),
+          },
+        ],
+      },
+    };
+    const mapped = sol.AddressLookupTables({ [table]: [address] }).compress(tx as any);
+    mapped.signatures[feePayer][0] = 9;
+    mapped.msg.instructions[0].data[0] = 9;
+    deepStrictEqual(tx, original);
+  });
+  should('AddressLookupTables rejects malformed table entries', () => {
+    throws(() => sol.AddressLookupTables(undefined as any), /address tables must be an object/);
+    throws(() => sol.AddressLookupTables(null as any), /address tables must be an object/);
+    throws(() => sol.AddressLookupTables(1 as any), /address tables must be an object/);
+    throws(() => sol.AddressLookupTables([] as any), /address tables must be an object/);
+    throws(
+      () => sol.AddressLookupTables({ table: '11111111111111111111111111111111' as any }),
+      /address table table must be an array/
+    );
+    throws(
+      () => sol.AddressLookupTables({ table: [1] as any }),
+      /address table table entry 0 must be a string/
+    );
   });
   should('other v0 tx', () => {
     const TX1 = base64.decode(
