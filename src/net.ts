@@ -1,3 +1,4 @@
+import { abool, anumber } from '@noble/curves/utils.js';
 import { base58, base64 } from '@scure/base';
 import type { TokenInfo } from './hint.ts';
 import {
@@ -8,6 +9,7 @@ import {
   TransactionRaw,
   verifyTx,
 } from './index.ts';
+import { aarray, astring, validateObject } from './utils.ts';
 
 const _0n = /* @__PURE__ */ BigInt(0);
 
@@ -769,6 +771,36 @@ export type Balances = {
   /** Token balances keyed by mint and then address. */
   tokenBalances: Record<string, Record<string, bigint>>;
 };
+const abigint = (value: unknown, title: string): bigint => {
+  if (typeof value !== 'bigint')
+    throw new TypeError(`"${title}" expected bigint, got type=${typeof value}`);
+  return value;
+};
+
+const checkTransfer = (it: Transfer, title: string): void => {
+  validateObject(it as Record<string, any>, {}, {}, title);
+  if (it.from !== undefined) astring(it.from, title + '.from');
+  if (it.to !== undefined) astring(it.to, title + '.to');
+  abigint(it.value, title + '.value');
+};
+const checkTokenTransfer = (it: TokenTransfer, title: string): void => {
+  checkTransfer(it, title);
+  astring(it.contract, title + '.contract');
+  if (it.tokenAccount !== undefined) astring(it.tokenAccount, title + '.tokenAccount');
+  if (it.owner !== undefined) astring(it.owner, title + '.owner');
+  anumber(it.decimals, title + '.decimals');
+};
+const checkTxTransfers = (tx: TxTransfers, title: string): void => {
+  validateObject(tx as Record<string, any>, {}, {}, title);
+  astring(tx.hash, title + '.hash');
+  aarray(tx.transfers, title + '.transfers', checkTransfer);
+  aarray(tx.tokenTransfers, title + '.tokenTransfers', checkTokenTransfer);
+  abool(tx.reverted, title + '.reverted');
+  validateObject(tx.info as Record<string, any>, {}, {}, title + '.info');
+  astring(tx.info.raw, title + '.info.raw');
+  aarray(tx.info.log, title + '.info.log', (log, logTitle) => astring(log, logTitle));
+  abigint(tx.info.fee, title + '.info.fee');
+};
 /**
  * Calculates balances at specific point in time after tx.
  * Also, useful as a sanity check in case we've missed something.
@@ -792,6 +824,7 @@ export type Balances = {
  * ```
  */
 export function calcTransfersDiff(transfers: TxTransfers[]): (TxTransfers & Balances)[] {
+  transfers = aarray(transfers, 'transfers', checkTxTransfers);
   const balances: Record<string, bigint> = {};
   const tokenBalances: Record<string, Record<string, bigint>> = {};
   const res: (TxTransfers & Balances)[] = [];

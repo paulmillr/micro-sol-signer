@@ -4,6 +4,7 @@ import { concatBytes, isBytes } from '@noble/hashes/utils.js';
 import { base16, base58, base64, utf8, type TArg, type TRet } from '@scure/base';
 import * as P from 'micro-packed';
 import type { Instruction } from '../index.ts';
+import { aarray, astring } from '../utils.ts';
 export type { TArg, TRet } from '@scure/base';
 
 /*
@@ -991,6 +992,8 @@ export function mapType<T extends BasicType, DT extends DefinedTypes>(
   type: T,
   dt: DT
 ): TRet<CoderType<GetType<T, DT>>> {
+  if (!P.utils.isPlainObject(type))
+    throw new TypeError('"type" expected object, got type=' + typeof type);
   // Public callers use the returned coder directly; exposing only the decoded value type breaks
   // `.encode()` / `.decode()`.
   const t = mapTypeInternal(type, dt);
@@ -1096,6 +1099,8 @@ export function parsePDAs<T extends ArrLike<PDAType>, DT extends DefinedTypes = 
   pda: T,
   dt: DT = {} as DT
 ): TRet<PDAs<T, DT>> {
+  astring(program, 'program');
+  if (!Array.isArray(pda)) throw new TypeError('"pda" expected array, got type=' + typeof pda);
   const res: Record<string, any> = {};
   const seen = new Set<string>();
   for (const p of pda) {
@@ -1523,6 +1528,7 @@ export function defineAccounts<T extends ArrLike<ContractAccount>, DT extends De
   accounts: T,
   types: DT
 ): TRet<AccountDefinitions<T, DT>> {
+  aarray(accounts, 'accounts');
   const coders: Record<string, any> = {};
   const decoders: Record<string, any> = {};
   const seen = new Set<string>();
@@ -1596,6 +1602,8 @@ type GetTypeProgram<P extends Program> = {
  * ```
  */
 export function defineProgram<P extends Program>(p: P): TRet<GetTypeProgram<P>> {
+  if (!P.utils.isPlainObject(p))
+    throw new TypeError('"p" expected object, got type=' + typeof p);
   if (p.kind !== 'programNode') throw new Error('idl: wrong program node');
   // Child helpers own section-specific validation; defineProgram only wires their results together.
   const types = parseDefinedTypes(p.definedTypes) as any;
@@ -1657,6 +1665,8 @@ export type GetTypeIDL<T extends IDL> = {
  * ```
  */
 export function defineIDL<T extends IDL>(idl: T): TRet<GetTypeIDL<T>> {
+  if (!P.utils.isPlainObject(idl))
+    throw new TypeError('"idl" expected object, got type=' + typeof idl);
   if (idl.kind !== 'rootNode') throw new Error('idl: wrong root node');
   // Additional program names share one plain-object table under the main program.
   const res: Record<string, any> = {

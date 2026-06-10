@@ -695,12 +695,26 @@ export function AddressLookupTables(tables: Record<string, string[]>): AddressLo
     }));
     return { signatures, msg: { ...tx.msg, instructions } };
   };
+  const checkLookupTx = (tx: LookupTransaction): void => {
+    if (!P.utils.isPlainObject(tx)) throw new TypeError('SOL.tx: tx must be an object');
+    if (!P.utils.isPlainObject(tx.signatures))
+      throw new TypeError('SOL.tx: tx.signatures must be an object');
+    if (!P.utils.isPlainObject(tx.msg))
+      throw new TypeError('SOL.tx: tx.msg must be an object');
+    if (!Array.isArray(tx.msg.instructions))
+      throw new TypeError('SOL.tx: tx.msg.instructions must be an array');
+  };
   return {
     // resolve addresses in transaction using provided tables
-    resolve: (tx: LookupTransaction) =>
-      mapInstructions(tx, (k) => (direct.has(k) ? direct.get(k)! : k)),
+    resolve: (tx: LookupTransaction) => {
+      checkLookupTx(tx);
+      return mapInstructions(tx, (k) => (direct.has(k) ? direct.get(k)! : k));
+    },
     // compresses addresses using tables
     compress(tx: LookupTransaction) {
+      checkLookupTx(tx);
+      if (typeof tx.msg.feePayer !== 'string')
+        throw new TypeError('SOL.tx: tx.msg.feePayer must be a string');
       // The fee payer and signer metas stay as direct addresses; only nonsigner entries are
       // compressed.
       const blacklist = new Set();
