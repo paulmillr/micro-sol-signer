@@ -1,5 +1,5 @@
 import { concatBytes } from '@noble/hashes/utils.js';
-import { describe, should } from '@paulmillr/jsbt/test.js';
+import { describe, it } from '@paulmillr/jsbt/test.js';
 import { base58, hex, utf8 } from '@scure/base';
 import * as P from 'micro-packed';
 import { deepStrictEqual, throws } from 'node:assert';
@@ -8,7 +8,7 @@ import * as sol from '../src/index.ts';
 // This is compatible with solana-cli sign-offchain-message
 // https://docs.anza.xyz/cli/examples/sign-offchain-message/
 describe('Offchain messages', () => {
-  should('ascii', () => {
+  it('ascii', () => {
     const bytes = new Uint8Array([
       255, 115, 111, 108, 97, 110, 97, 32, 111, 102, 102, 99, 104, 97, 105, 110, 0, 0, 12, 0, 84,
       101, 115, 116, 32, 77, 101, 115, 115, 97, 103, 101,
@@ -25,7 +25,7 @@ describe('Offchain messages', () => {
     });
     deepStrictEqual(sol.Offchain.Message.encode({ version: 0, msg: 'Test Message' }), bytes);
   });
-  should('MessageRaw.decode does not alias decoded message bytes', () => {
+  it('MessageRaw.decode does not alias decoded message bytes', () => {
     const raw = new Uint8Array([
       255, 115, 111, 108, 97, 110, 97, 32, 111, 102, 102, 99, 104, 97, 105, 110, 0, 0, 1, 0, 65,
     ]);
@@ -38,7 +38,7 @@ describe('Offchain messages', () => {
       ])
     );
   });
-  should('Message round-trips long ascii messages', () => {
+  it('Message round-trips long ascii messages', () => {
     const msg = '1'.repeat(1213);
     const raw = sol.Offchain.Message.encode({ version: 0, msg });
     deepStrictEqual(sol.Offchain.MessageRaw.decode(raw), {
@@ -53,7 +53,7 @@ describe('Offchain messages', () => {
     });
     deepStrictEqual(sol.Offchain.Message.decode(raw), { version: 0, msg });
   });
-  should('Message rejects malformed high-level inputs', () => {
+  it('Message rejects malformed high-level inputs', () => {
     throws(() => sol.Offchain.Message.encode(undefined as any), /message must be an object/);
     throws(() => sol.Offchain.Message.encode(null as any), /message must be an object/);
     throws(() => sol.Offchain.Message.encode([] as any), /message must be an object/);
@@ -63,7 +63,7 @@ describe('Offchain messages', () => {
       /msg must be a string/
     );
   });
-  should('utf8', () => {
+  it('utf8', () => {
     const bytes = new Uint8Array([
       255, 115, 111, 108, 97, 110, 97, 32, 111, 102, 102, 99, 104, 97, 105, 110, 0, 1, 35, 0, 208,
       162, 208, 181, 209, 129, 209, 130, 208, 190, 208, 178, 208, 190, 208, 181, 32, 209, 129, 208,
@@ -84,7 +84,7 @@ describe('Offchain messages', () => {
     });
     deepStrictEqual(sol.Offchain.Message.encode({ version: 0, msg: 'Тестовое сообщение' }), bytes);
   });
-  should('sign/verify', () => {
+  it('sign/verify', () => {
     const privateKey = hex.decode(
       '99da9559e15e913ee9ab2e53e3dfad575da33b49be1125bb922e33494f498828'
     );
@@ -114,7 +114,7 @@ describe('Offchain messages', () => {
       deepStrictEqual(sol.Offchain.verify(sig, pubKey2, msg), false);
     }
   });
-  should('signBytes', () => {
+  it('signBytes', () => {
     // Compat with signBytes/verifySignature in @solana/kit
     // https://solana.com/developers/cookbook/wallets/sign-message
     const privateKey = hex.decode(
@@ -126,7 +126,7 @@ describe('Offchain messages', () => {
     deepStrictEqual(sol.signBytes(privateKey, bytes), sig);
     deepStrictEqual(sol.verifyBytes(sig, sol.getAddress(privateKey), bytes), true);
   });
-  should('sol_signMessage (phantom)', () => {
+  it('sol_signMessage (phantom)', () => {
     // 1. Import privateKey
     // 45QmaP6zVBfDPLWrbtaMiVFKbRLPwwAqXHiDkx2FcUHZoV1uU6uB8cZyGBKQbiExXyyzghaE65THFi2h8mSwkFuj to
     // phantom
@@ -177,7 +177,7 @@ describe('Offchain messages', () => {
       )
     );
   });
-  should('solana_signMessage (wallet connect)', () => {
+  it('solana_signMessage (wallet connect)', () => {
     /*
 
     // Request
@@ -241,4 +241,4 @@ describe('Offchain messages', () => {
   });
 });
 
-should.runWhen(import.meta.url);
+it.runWhen(import.meta.url);

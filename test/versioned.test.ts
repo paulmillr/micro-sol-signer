@@ -1,10 +1,10 @@
-import { describe, should } from '@paulmillr/jsbt/test.js';
+import { describe, it } from '@paulmillr/jsbt/test.js';
 import { base64 } from '@scure/base';
 import { deepStrictEqual, throws } from 'node:assert';
 import * as sol from '../src/index.ts';
 
 describe('Solana', () => {
-  should('decode/encode V0 transactions (raw)', () => {
+  it('decode/encode V0 transactions (raw)', () => {
     // Random mainnet tx with multiple ALTs which was very hard to find
     const TX = base64.decode(
       'AZkX0FW20YGWeqj+W0aEdfs9bJLkmBbVbNAsCVt87ozUxMA2XMHwonKyQAhJm9shIbxeZS0sq+Ea1UahBKcbVAuAAQACCgG+ry1YYX66OPeyuO6BX7bNZLBJuMGEXVDS+/LLwvUrwWcb0Qh3zSFEKSZ1mdNgjIyb0DKiGO5kohBFiTGzo+PbiRSaybK6JOKNeh+iw5AO9rhs1ZP5bZeopsX4fFIx6WVWdAK6kpPNdaP6CJDGpRJ8NPwAvOtLVhmxKZPC5vxI2rXDU7hpAx33hd4Wuy2yGnLXKUrc0K1Oyi92F+JxL09RdeR/bOi2JWlgTWq92wutoib5dg7ZU6tHktr+vAUtHFMe/LPik8Jo0bvN3E7SZx4jTD9gYO/ywnQq3ERQWl1n62srPATpTeozmXXcLyn3TOfj9URHVjOKoAlsV14Ql3MDBkZv5SEXMv/srbpyw5vnvIzlu8X3EmssQ5s6QAAAABqx8tvKJseCWhSgA4aek1qgkfYmEFztYw2C6PmlOvMijrffFt8AoWekDxPt3rNbsnGp3irFVOrUGZufNJHLi3kCCAAFAutGBAAJQiMkAQIAAyUEJAUkASQmIycPBAEQERITFBUWFxgZACgkKQAqCgsEBQwNJCQmKw4jKywkJC0AGgEbBRwGBx0eHyAhIpkBAc7cusQAAAAAAAAAAAAAAAAAABFlCAcAAAAACgAAAAAAAAAAAAAAEwAEAPcmAsTH6uWG7yGJTiakZ8afcHX1djF5a6hJI8acb9dT67AOAAcArCYnCtACjpcN91fV8U+Mu2poEOSBORJWCOqVi3GOspRJIBQAAwDyJgabiFf+q4GE+2h/Y0YYwDXaxDncGus7VZig8AAAAAABAwANKUgaezLclq6i6/fo4RGyOuqlNL8whAoKN2dzwqWgBT1DQD48AC3qXXvmLqhMA719aEila1qH/+y+dr0pYWkooAWd9TBXCxcYGRobHB0eHyAhCAoBAAMWIgQFMxVkDaD3rLbhRB2mALD51FQeE65XmvAncV4SDyfgh5kJgoGAeHt/eoWDA3wJBw=='
@@ -14,7 +14,7 @@ describe('Solana', () => {
     deepStrictEqual(sol.Message.encode(sol.Message.decode(msgBytes)), msgBytes);
     deepStrictEqual(sol.Transaction.encode(sol.Transaction.decode(TX)), TX);
   });
-  should('duplicate ALT accounts upgrade to writable', () => {
+  it('duplicate ALT accounts upgrade to writable', () => {
     const table = '46EcyAncfyhxH1ZuT2nbSVdtL5rna4uKQyWQ2nMMjp8N';
     const msg = {
       version: 0,
@@ -36,7 +36,7 @@ describe('Solana', () => {
       { address: `${table}:1`, sign: false, write: true },
     ]);
   });
-  should('AddressLookupTables mapping does not alias transaction bytes', () => {
+  it('AddressLookupTables mapping does not alias transaction bytes', () => {
     const table = '46EcyAncfyhxH1ZuT2nbSVdtL5rna4uKQyWQ2nMMjp8N';
     const feePayer = '11111111111111111111111111111111';
     const address = '3gqrRcuQ8xprBhymXS1FctNxi8hbw3bz5EgKBUgSWiQH';
@@ -75,7 +75,7 @@ describe('Solana', () => {
     mapped.msg.instructions[0].data[0] = 9;
     deepStrictEqual(tx, original);
   });
-  should('AddressLookupTables rejects malformed table entries', () => {
+  it('AddressLookupTables rejects malformed table entries', () => {
     throws(() => sol.AddressLookupTables(undefined as any), /address tables must be an object/);
     throws(() => sol.AddressLookupTables(null as any), /address tables must be an object/);
     throws(() => sol.AddressLookupTables(1 as any), /address tables must be an object/);
@@ -89,7 +89,7 @@ describe('Solana', () => {
       /address table table entry 0 must be a string/
     );
   });
-  should('other v0 tx', () => {
+  it('other v0 tx', () => {
     const TX1 = base64.decode(
       'AVNruonGNAucJxZnPyGo+TlrW1ILS5fR7exfqy4MRq478ufAWgZym5q4nm8oFxy1kz78u8zZwpyjIKtuSve2FQSAAQACBIQTRm3anHp3GUE0vIrsB8wJaiKfJ70MW3G1ZS7SoKoGKxWtDsm4CUU+A+kvBGDWCqcTh6sCyx8ZtrJThK+PSCACd6avlzObesiNGJLJBEb1AAIwkmb2LlPBGCRJggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAa9QcMW9HtBLBIT81eIv92IJY6A0IkflkFrrBrrnakIMBAgQBAAADLAIAAAABAAAAAAAAAOUrBmT3mLaIdnThWZjPA6EFD56s8A3zq6kaqEVPbndxAA=='
     );
@@ -115,7 +115,7 @@ describe('Solana', () => {
       deepStrictEqual(sol.Transaction.encode(sol.Transaction.decode(TX)), TX);
     }
   });
-  should('compress/resolve', async () => {
+  it('compress/resolve', async () => {
     const contracts = [
       '46EcyAncfyhxH1ZuT2nbSVdtL5rna4uKQyWQ2nMMjp8N',
       '4SQiDxFoDD2wBCBnQTSC7VKgwM7wgk3geNkUCV31zRVz',
@@ -769,4 +769,4 @@ describe('Solana', () => {
   });
 });
 
-should.runWhen(import.meta.url);
+it.runWhen(import.meta.url);

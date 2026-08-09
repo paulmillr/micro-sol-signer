@@ -5,7 +5,6 @@
   "files": [
     "*.js",
     "*.d.ts",
-    "*.map",
     "idl",
     "src"
   ],
@@ -13,24 +12,21 @@
     "@noble/curves": "^2.2.0",
     "@noble/hashes": "^2.2.0",
     "@scure/base": "^2.2.0",
-    "micro-packed": "^0.9.0"
+    "micro-packed": "^0.11.0"
   },
   "devDependencies": {
-    "@paulmillr/jsbt": "0.6.0",
+    "@paulmillr/jsbt": "0.6.5",
     "@types/node": "25.9.0",
     "micro-ftch": "1.0.0",
     "prettier": "3.8.3",
     "typescript": "6.0.2"
   },
   "scripts": {
+    "benchmark:size": "npx bismar@0.1 -bs",
     "build": "tsc",
-    "build:clean": "rm -f *.{js,d.ts,js.map,d.ts,d.ts.map}; rm -rf idl",
-    "bundle": "npx --no @paulmillr/jsbt bundle",
-    "check": "npx --no @paulmillr/jsbt check",
+    "build:clean": "rm -f *.{js,d.ts,d.ts}; rm -rf idl",
     "format": "prettier --write src",
-    "test": "node test/index.ts",
-    "test:bun": "bun test/index.ts",
-    "test:deno": "deno --allow-env --allow-read test/index.ts"
+    "test": "node test/index.ts"
   },
   "exports": {
     ".": "./index.js",

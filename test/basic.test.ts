@@ -1,4 +1,4 @@
-import { describe, should } from '@paulmillr/jsbt/test.js';
+import { describe, it } from '@paulmillr/jsbt/test.js';
 import { base64, hex } from '@scure/base';
 import { deepStrictEqual, throws } from 'node:assert';
 import fs from 'node:fs';
@@ -19,49 +19,49 @@ const shortVecVectors = [
 ];
 
 describe('Solana', () => {
-  should('isOnCurve', () => {
+  it('isOnCurve', () => {
     for (let i = 0; i < vectors.isOnCurve.length; i++) {
       const { data, exp } = vectors.isOnCurve[i];
       deepStrictEqual(sol.isOnCurve(hex.decode(data)), exp, `pubKey: ${data}`);
     }
   });
 
-  should('key generation basic', () => {
+  it('key generation basic', () => {
     const key = hex.decode('99da9559e15e913ee9ab2e53e3dfad575da33b49be1125bb922e33494f498828');
     deepStrictEqual(sol.getAddress(key), '2q7pyhPwAwZ3QMfZrnAbDhnh9mDUqycszcpf86VgQxhF');
   });
-  should('public key from private key', () => {
+  it('public key from private key', () => {
     const key = hex.decode('99da9559e15e913ee9ab2e53e3dfad575da33b49be1125bb922e33494f498828');
     deepStrictEqual(
       sol.getPublicKey(key),
       hex.decode('1b2f49096e3e5dbd0fcfa9c0c0cd92d9ab3b21544b34d5dd4a65d98b878b9922')
     );
   });
-  should('address from public key', () => {
+  it('address from public key', () => {
     const key = hex.decode('1b2f49096e3e5dbd0fcfa9c0c0cd92d9ab3b21544b34d5dd4a65d98b878b9922');
     deepStrictEqual(sol.formatPublic(key), '2q7pyhPwAwZ3QMfZrnAbDhnh9mDUqycszcpf86VgQxhF');
   });
-  should('validateAddress validators', () => {
+  it('validateAddress validators', () => {
     sol.validateAddress('11111111111111111111111111111111');
     throws(() => sol.validateAddress(1 as any), TypeError);
     throws(() => sol.validateAddress('1111'), RangeError);
     throws(() => sol.validateAddress('not-base58'), RangeError);
   });
-  should('format private key base58', () => {
+  it('format private key base58', () => {
     const key = hex.decode('99da9559e15e913ee9ab2e53e3dfad575da33b49be1125bb922e33494f498828');
     deepStrictEqual(
       sol.formatPrivate(key),
       '45QmaP6zVBfDPLWrbtaMiVFKbRLPwwAqXHiDkx2FcUHZoV1uU6uB8cZyGBKQbiExXyyzghaE65THFi2h8mSwkFuj'
     );
   });
-  should('format private key hex', () => {
+  it('format private key hex', () => {
     const key = hex.decode('99da9559e15e913ee9ab2e53e3dfad575da33b49be1125bb922e33494f498828');
     deepStrictEqual(
       sol.formatPrivate(key, 'hex'),
       '99da9559e15e913ee9ab2e53e3dfad575da33b49be1125bb922e33494f4988281b2f49096e3e5dbd0fcfa9c0c0cd92d9ab3b21544b34d5dd4a65d98b878b9922'
     );
   });
-  should('format private key array', () => {
+  it('format private key array', () => {
     const key = hex.decode('99da9559e15e913ee9ab2e53e3dfad575da33b49be1125bb922e33494f498828');
     deepStrictEqual(
       sol.formatPrivate(key, 'array'),
@@ -73,18 +73,18 @@ describe('Solana', () => {
       ]
     );
   });
-  should('format private key throws', () => {
+  it('format private key throws', () => {
     const key = hex.decode('99da9559e15e913ee9ab2e53e3dfad575da33b49be1125bb922e33494f498828');
     throws(() => sol.formatPrivate(key, 'foobar'));
   });
-  should(`Key generation`, () => {
+  it(`Key generation`, () => {
     for (let i = 0; i < vectors.keypair.length; i++) {
       const { priv, pub } = vectors.keypair[i];
       const address = sol.getAddress(hex.decode(priv).slice(0, 32));
       deepStrictEqual(address, pub);
     }
   });
-  should('shortVec encode', () => {
+  it('shortVec encode', () => {
     for (const [_hex, exp] of shortVecVectors) {
       const bytes = hex.decode(_hex);
       deepStrictEqual(sol.shortU16.decode(bytes), exp);
@@ -92,7 +92,7 @@ describe('Solana', () => {
     }
     deepStrictEqual(sol.shortU16.decode(new Uint8Array(0)), 0);
   });
-  should('message', () => {
+  it('message', () => {
     const data = {
       TAG: 'legacy',
       data: {
@@ -113,7 +113,7 @@ describe('Solana', () => {
       )
     );
   });
-  should('message rejects impossible required signature counts', () => {
+  it('message rejects impossible required signature counts', () => {
     const bytes = sol.MessageRaw.encode({
       TAG: 'legacy',
       data: {
@@ -125,7 +125,7 @@ describe('Solana', () => {
     });
     throws(() => sol.Message.decode(bytes), /required signatures exceed account keys/);
   });
-  should('message rejects impossible readonly signed counts', () => {
+  it('message rejects impossible readonly signed counts', () => {
     const bytes = sol.MessageRaw.encode({
       TAG: 'legacy',
       data: {
@@ -137,7 +137,7 @@ describe('Solana', () => {
     });
     throws(() => sol.Message.decode(bytes), /readonly signed accounts exceed required signatures/);
   });
-  should('message rejects impossible readonly unsigned counts', () => {
+  it('message rejects impossible readonly unsigned counts', () => {
     const bytes = sol.MessageRaw.encode({
       TAG: 'legacy',
       data: {
@@ -149,7 +149,7 @@ describe('Solana', () => {
     });
     throws(() => sol.Message.decode(bytes), /readonly unsigned accounts exceed unsigned accounts/);
   });
-  should('message rejects impossible instruction account indexes', () => {
+  it('message rejects impossible instruction account indexes', () => {
     const msg = {
       TAG: 'legacy',
       data: {
@@ -177,7 +177,7 @@ describe('Solana', () => {
       /program index exceeds account keys/
     );
   });
-  should('message decode copies instruction data bytes', () => {
+  it('message decode copies instruction data bytes', () => {
     const bytes = sol.MessageRaw.encode({
       TAG: 'legacy',
       data: {
@@ -192,7 +192,7 @@ describe('Solana', () => {
     decoded.instructions[0].data[0] = 9;
     deepStrictEqual(bytes, original);
   });
-  should('message decode does not share account meta objects', () => {
+  it('message decode does not share account meta objects', () => {
     const bytes = sol.MessageRaw.encode({
       TAG: 'legacy',
       data: {
@@ -209,7 +209,7 @@ describe('Solana', () => {
       { address: '11111111111111111111111111111111', sign: true, write: true },
     ]);
   });
-  should('message raw decode copies compiled instruction data bytes', () => {
+  it('message raw decode copies compiled instruction data bytes', () => {
     const bytes = sol.MessageRaw.encode({
       TAG: 'legacy',
       data: {
@@ -224,7 +224,7 @@ describe('Solana', () => {
     decoded.data.instructions[0].data[0] = 9;
     deepStrictEqual(bytes, original);
   });
-  should('message rejects malformed high-level instruction fields', () => {
+  it('message rejects malformed high-level instruction fields', () => {
     const msg = {
       version: 'legacy',
       feePayer: '11111111111111111111111111111111',
@@ -292,7 +292,7 @@ describe('Solana', () => {
       /account write flag must be boolean/
     );
   });
-  should('message rejects malformed high-level message objects', () => {
+  it('message rejects malformed high-level message objects', () => {
     throws(() => sol.Message.encode(undefined as any), /message must be an object/);
     throws(() => sol.Message.encode(null as any), /message must be an object/);
     throws(() => sol.Message.encode([] as any), /message must be an object/);
@@ -316,7 +316,7 @@ describe('Solana', () => {
       /unsupported message version/
     );
   });
-  should('createTx rejects malformed instruction lists', () => {
+  it('createTx rejects malformed instruction lists', () => {
     throws(
       () =>
         sol.createTx(
@@ -327,7 +327,7 @@ describe('Solana', () => {
       /instructions must be an array/
     );
   });
-  should('transaction', () => {
+  it('transaction', () => {
     const privKey = new Uint8Array(32).fill(8);
     const source = sol.getAddress(privKey);
     const blockhash = 'EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3hq1k';
@@ -379,7 +379,7 @@ describe('Solana', () => {
     deepStrictEqual(sol.getMessageFromTransaction(base64.encode(expSigned)), message);
     deepStrictEqual(sol.getMessageFromTransaction(base64.encode(expUnsigned)), message);
   });
-  should('transaction rejects signature count mismatches', () => {
+  it('transaction rejects signature count mismatches', () => {
     const privateKey = new Uint8Array(32).fill(8);
     const source = sol.getAddress(privateKey);
     const msg = {
@@ -432,7 +432,7 @@ describe('Solana', () => {
       /signatures length does not match required signatures/
     );
   });
-  should('transaction rejects malformed high-level signature maps', () => {
+  it('transaction rejects malformed high-level signature maps', () => {
     const privateKey = new Uint8Array(32).fill(8);
     const source = sol.getAddress(privateKey);
     const tx = {
@@ -457,13 +457,13 @@ describe('Solana', () => {
       /signatures must be an object/
     );
   });
-  should('transaction rejects malformed high-level transaction objects', () => {
+  it('transaction rejects malformed high-level transaction objects', () => {
     throws(() => sol.Transaction.encode(undefined as any), /transaction must be an object/);
     throws(() => sol.Transaction.encode(null as any), /transaction must be an object/);
     throws(() => sol.Transaction.encode(1 as any), /transaction must be an object/);
     throws(() => sol.Transaction.encode([] as any), /transaction must be an object/);
   });
-  should('transaction rejects invalid embedded raw messages', () => {
+  it('transaction rejects invalid embedded raw messages', () => {
     const privateKey = new Uint8Array(32).fill(8);
     const source = sol.getAddress(privateKey);
     const sig = new Uint8Array(64);
@@ -524,7 +524,7 @@ describe('Solana', () => {
       /instruction key index exceeds account keys/
     );
   });
-  should('transaction decode copies signature bytes', () => {
+  it('transaction decode copies signature bytes', () => {
     const source = '11111111111111111111111111111111';
     const raw = sol.TransactionRaw.encode({
       signatures: [new Uint8Array(64).fill(1)],
@@ -546,7 +546,7 @@ describe('Solana', () => {
     decoded.signatures[source][0] = 9;
     deepStrictEqual(raw, original);
   });
-  should('createTokenTransferChecked', () => {
+  it('createTokenTransferChecked', () => {
     const mint = 'So11111111111111111111111111111111111111112';
     const from = 'EqywLUZcm73PSWri93X3M5TN62iFMsUPMjvWYUq89dKB';
     const to = 'FDwkzWGxx6LfCfzcmVVLEk3QUMxNhuFuKEMRwzR4Dtys';
@@ -571,7 +571,7 @@ describe('Solana', () => {
       )
     );
   });
-  should('sys/createAccount', () => {
+  it('sys/createAccount', () => {
     const opt = {
       payer: '73c3aLQxue8M6Kj9Y3gxhkxzFeyB8vxYJLTw7Z8RxstQ',
       newAccount: 'BvMRjBKGsr8NiAkRKC3h7tu1xvJQ2LK9hpQP783sNdQf',
@@ -598,7 +598,7 @@ describe('Solana', () => {
       'Create new account=BvMRjBKGsr8NiAkRKC3h7tu1xvJQ2LK9hpQP783sNdQf with balance of 0.000000123 and owner program 11111111111111111111111111111111, using funding account 73c3aLQxue8M6Kj9Y3gxhkxzFeyB8vxYJLTw7Z8RxstQ'
     );
   });
-  should('sys/transfer (123)', () => {
+  it('sys/transfer (123)', () => {
     const opt = {
       source: '9zM2WpVSyTKBmjpMiG7JTkmyRBdPVcKqCLQPnhMLqTxr',
       destination: '3gqrRcuQ8xprBhymXS1FctNxi8hbw3bz5EgKBUgSWiQH',
@@ -621,7 +621,7 @@ describe('Solana', () => {
       'Transfer 0.000000123 SOL from 9zM2WpVSyTKBmjpMiG7JTkmyRBdPVcKqCLQPnhMLqTxr to 3gqrRcuQ8xprBhymXS1FctNxi8hbw3bz5EgKBUgSWiQH'
     );
   });
-  should('sys/transfer (2**53)', () => {
+  it('sys/transfer (2**53)', () => {
     const opt = {
       source: 'DV8e8SwcZEaPEGDsLEh3HmXySxbMGaC2TSVCh2Pz6UF1',
       destination: '6y6nyKZKU3kuhSHdGT9YQ63DSj2tWoqKB8xui2cofqqj',
@@ -636,7 +636,7 @@ describe('Solana', () => {
       data: hex.decode('020000000000000000002000'),
     });
   });
-  should('sys/transfer (2**53-1)', () => {
+  it('sys/transfer (2**53-1)', () => {
     const opt = {
       source: 'DV8e8SwcZEaPEGDsLEh3HmXySxbMGaC2TSVCh2Pz6UF1',
       destination: '6y6nyKZKU3kuhSHdGT9YQ63DSj2tWoqKB8xui2cofqqj',
@@ -651,7 +651,7 @@ describe('Solana', () => {
       data: hex.decode('02000000ffffffffffff1f00'),
     });
   });
-  should('sys/transfer (2**54-1)', () => {
+  it('sys/transfer (2**54-1)', () => {
     // JS related stuff, 2**54-1 is 2**54. It is broken, but compatible with official sdk.
     // NOTE: for safety it is better to always use bigint here
     const opt = {
@@ -668,7 +668,7 @@ describe('Solana', () => {
       data: hex.decode('020000000000000000004000'),
     });
   });
-  should('sys/transfer (2**54-1)', () => {
+  it('sys/transfer (2**54-1)', () => {
     const opt = {
       source: 'DV8e8SwcZEaPEGDsLEh3HmXySxbMGaC2TSVCh2Pz6UF1',
       destination: '6y6nyKZKU3kuhSHdGT9YQ63DSj2tWoqKB8xui2cofqqj',
@@ -683,7 +683,7 @@ describe('Solana', () => {
       data: hex.decode('020000000000000000004000'),
     });
   });
-  should('sys/transferWithSeed', () => {
+  it('sys/transferWithSeed', () => {
     const opt = {
       source: 'Bb8JGELn5e5qRwqemmrA8xvT6gcv8ztWmFeQWwiLYGnP',
       baseAccount: 'BFwz5Z8JaBWsBuGryY825efJ4kbPja4RQERiE9DiAi5v',
@@ -708,7 +708,7 @@ describe('Solana', () => {
       data: opt,
     });
   });
-  should('sys/allocate', () => {
+  it('sys/allocate', () => {
     const opt = {
       newAccount: 'J8djW2D33VPaNonXZVrbF1vQGne2GP777dTbHoTMg9sD',
       space: 42n,
@@ -723,7 +723,7 @@ describe('Solana', () => {
       data: opt,
     });
   });
-  should('sys/allocateWithSeed', () => {
+  it('sys/allocateWithSeed', () => {
     const opt = {
       newAccount: '2c78yokQde2r2GptX4Vnp7yZCpSAvjvvzYf2cHes3bTB',
       baseAccount: 'DrHjam4NZ4fuPyQwBWf739jvuwsgxrDhMuARN22R6KhP',
@@ -747,7 +747,7 @@ describe('Solana', () => {
       data: opt,
     });
   });
-  should('sys/assign', () => {
+  it('sys/assign', () => {
     const opt = {
       programAddress: '7WCuK6QTsBTaunr9aTmfwxRjmMA7ahsHxJgdGt4sV2SH',
       account: '3RDNFUs75piNzG65Fpa6bRXP6F53MKg7dMVegSHGnUwD',
@@ -766,7 +766,7 @@ describe('Solana', () => {
       'Assign account=3RDNFUs75piNzG65Fpa6bRXP6F53MKg7dMVegSHGnUwD to owner program=7WCuK6QTsBTaunr9aTmfwxRjmMA7ahsHxJgdGt4sV2SH'
     );
   });
-  should('sys/assignWithSeed', () => {
+  it('sys/assignWithSeed', () => {
     const opt = {
       account: 'Gp1NpkLNDp4e3JAhLA2an6Rz3ymLFUXaGFzRd1nmUa2s',
       baseAccount: 'FTHMr5U69DcAh4LJBvT4wow2TzDV2yzDbMY1mdbKYdfQ',
@@ -789,7 +789,7 @@ describe('Solana', () => {
       data: opt,
     });
   });
-  should('sys/createAccountWithSeed', () => {
+  it('sys/createAccountWithSeed', () => {
     const opt = {
       payer: 'GEzF93wbgs9uPNahfuuTLGywp2LzVUgT72rMwCYj5hm9',
       newAccount: 'FDwkzWGxx6LfCfzcmVVLEk3QUMxNhuFuKEMRwzR4Dtys',
@@ -816,7 +816,7 @@ describe('Solana', () => {
       data: opt,
     });
   });
-  should('sys/initializeNonce', () => {
+  it('sys/initializeNonce', () => {
     const opt = {
       nonceAccount: '5HqyqjsFMX2tfGGDpGUwqr7dq4nA9V5xLJ1kPkHgF4uC',
       nonceAuthority: 'BVnmvPc91Gd23uzKJuPrxqFqaDN6zx74PxKDemF7LsbL',
@@ -835,7 +835,7 @@ describe('Solana', () => {
       data: opt,
     });
   });
-  should('sys/advanceNonce', () => {
+  it('sys/advanceNonce', () => {
     const opt = {
       nonceAccount: 'BkbGz5uBKb7F5v21PUe9AWpRg7JyAZp7wmPywUkMZuA3',
       nonceAuthority: '3ECJhLBQ9DAuKBKNjQGLEk3YqoFcF1YvhdayQ2C96eXF',
@@ -858,7 +858,7 @@ describe('Solana', () => {
       'Consume nonce in nonce account=BkbGz5uBKb7F5v21PUe9AWpRg7JyAZp7wmPywUkMZuA3 (owner: 3ECJhLBQ9DAuKBKNjQGLEk3YqoFcF1YvhdayQ2C96eXF)'
     );
   });
-  should('sys/withdrawFromNonce', () => {
+  it('sys/withdrawFromNonce', () => {
     const opt = {
       nonceAccount: 'FThSRTXNUEseFA7ZVPUAVbjAS3dWUtzyehnYxERgSy8K',
       nonceAuthority: '7ssLmqfddcmkY5yTGFR1QHi6asuL15LyBnTG5GSSxiXN',
@@ -885,7 +885,7 @@ describe('Solana', () => {
       'Withdraw 0.000000123 SOL from nonce account=FThSRTXNUEseFA7ZVPUAVbjAS3dWUtzyehnYxERgSy8K (owner: 7ssLmqfddcmkY5yTGFR1QHi6asuL15LyBnTG5GSSxiXN) to FwRPnndp5M5N6aLLZr6Dx9XMbLMQoJ9zLk2cB3easfej'
     );
   });
-  should('sys/authorizeNonce', () => {
+  it('sys/authorizeNonce', () => {
     const opt = {
       nonceAccount: 'Hozo7TadHq6PMMiGLGNvgk79Hvj5VTAM7Ny2bamQ2m8q',
       nonceAuthority: 'gyUeBThw5uL4PXSjSAtCUFnL4LtRXZf87NXGgxT6eNs',
@@ -908,11 +908,11 @@ describe('Solana', () => {
       'Change owner of nonce account=Hozo7TadHq6PMMiGLGNvgk79Hvj5VTAM7Ny2bamQ2m8q from gyUeBThw5uL4PXSjSAtCUFnL4LtRXZf87NXGgxT6eNs to 4WmPCPTYwtMS7eM6WbfRd21H6VAA8eubEPzEDdt5WKfT'
     );
   });
-  should('programAddress', () => {
+  it('programAddress', () => {
     let p = sol.programAddress('BPFLoader1111111111111111111111111111111111', Uint8Array.of());
     deepStrictEqual(p, 'EXWkUCz3YJU9TDVk39ogA4TwoVsUi75ZDhH6yT7acPgQ');
   });
-  should('tokenAddress', () => {
+  it('tokenAddress', () => {
     const tokenA = sol.tokenAddress({
       mint: '7o36UsWR1JQLpZ9PE2gn9L4SQ69CNNiWAXd4Jt7rqz9Z',
       owner: 'B8UwBUUnKwCyKuGMbFKWaG7exYdDk2ozZrPg72NyVbfj',
@@ -943,7 +943,7 @@ describe('Solana', () => {
     // );
   });
   describe('token', () => {
-    should('initializeMint', () => {
+    it('initializeMint', () => {
       const t = sol.token.initializeMint({
         mint: '7o36UsWR1JQLpZ9PE2gn9L4SQ69CNNiWAXd4Jt7rqz9Z',
         decimals: 2,
@@ -961,7 +961,7 @@ describe('Solana', () => {
         ),
       });
     });
-    should('initializeMint (optional)', () => {
+    it('initializeMint (optional)', () => {
       const t = sol.token.initializeMint({
         mint: '7o36UsWR1JQLpZ9PE2gn9L4SQ69CNNiWAXd4Jt7rqz9Z',
         decimals: 2,
@@ -977,7 +977,7 @@ describe('Solana', () => {
         data: hex.decode('0002b8e1927f2da9f65b5f42129930d617974313b6a198e03b6f2ce83bf714d78f8100'),
       });
     });
-    should('initializeAccount', () => {
+    it('initializeAccount', () => {
       const t = sol.token.initializeAccount({
         mint: '7o36UsWR1JQLpZ9PE2gn9L4SQ69CNNiWAXd4Jt7rqz9Z',
         account: 'DShWnroshVbeUp28oopA3Pu7oFPDBtC1DBmPECXXAQ9n',
@@ -994,7 +994,7 @@ describe('Solana', () => {
         data: hex.decode('01'),
       });
     });
-    should('transfer', () => {
+    it('transfer', () => {
       const t = sol.token.transfer({
         source: '7o36UsWR1JQLpZ9PE2gn9L4SQ69CNNiWAXd4Jt7rqz9Z',
         destination: 'DShWnroshVbeUp28oopA3Pu7oFPDBtC1DBmPECXXAQ9n',
@@ -1011,7 +1011,7 @@ describe('Solana', () => {
         data: hex.decode('037b00000000000000'),
       });
     });
-    should('transfer (2**53-1)', () => {
+    it('transfer (2**53-1)', () => {
       const t = sol.token.transfer({
         source: '7o36UsWR1JQLpZ9PE2gn9L4SQ69CNNiWAXd4Jt7rqz9Z',
         destination: 'DShWnroshVbeUp28oopA3Pu7oFPDBtC1DBmPECXXAQ9n',
@@ -1028,7 +1028,7 @@ describe('Solana', () => {
         data: hex.decode('03ffffffffffff1f00'),
       });
     });
-    should('approve', () => {
+    it('approve', () => {
       const t = sol.token.approve({
         source: '7o36UsWR1JQLpZ9PE2gn9L4SQ69CNNiWAXd4Jt7rqz9Z',
         delegate: 'DShWnroshVbeUp28oopA3Pu7oFPDBtC1DBmPECXXAQ9n',
@@ -1045,7 +1045,7 @@ describe('Solana', () => {
         data: hex.decode('047b00000000000000'),
       });
     });
-    should('revoke', () => {
+    it('revoke', () => {
       const t = sol.token.revoke({
         source: '7o36UsWR1JQLpZ9PE2gn9L4SQ69CNNiWAXd4Jt7rqz9Z',
         owner: 'DShWnroshVbeUp28oopA3Pu7oFPDBtC1DBmPECXXAQ9n',
@@ -1059,7 +1059,7 @@ describe('Solana', () => {
         data: hex.decode('05'),
       });
     });
-    should('setAuthority (new)', () => {
+    it('setAuthority (new)', () => {
       const t = sol.token.setAuthority({
         owned: '7o36UsWR1JQLpZ9PE2gn9L4SQ69CNNiWAXd4Jt7rqz9Z',
         newAuthority: 'DShWnroshVbeUp28oopA3Pu7oFPDBtC1DBmPECXXAQ9n',
@@ -1075,7 +1075,7 @@ describe('Solana', () => {
         data: hex.decode('060101b8e1927f2da9f65b5f42129930d617974313b6a198e03b6f2ce83bf714d78f81'),
       });
     });
-    should('setAuthority', () => {
+    it('setAuthority', () => {
       const t = sol.token.setAuthority({
         owned: '7o36UsWR1JQLpZ9PE2gn9L4SQ69CNNiWAXd4Jt7rqz9Z',
         authorityType: { TAG: 'closeAccount' },
@@ -1091,7 +1091,7 @@ describe('Solana', () => {
         data: hex.decode('060300'),
       });
     });
-    should('mintTo', () => {
+    it('mintTo', () => {
       const t = sol.token.mintTo({
         mint: '7o36UsWR1JQLpZ9PE2gn9L4SQ69CNNiWAXd4Jt7rqz9Z',
         token: 'DShWnroshVbeUp28oopA3Pu7oFPDBtC1DBmPECXXAQ9n',
@@ -1108,7 +1108,7 @@ describe('Solana', () => {
         data: hex.decode('077b00000000000000'),
       });
     });
-    should('burn', () => {
+    it('burn', () => {
       const t = sol.token.burn({
         mint: '7o36UsWR1JQLpZ9PE2gn9L4SQ69CNNiWAXd4Jt7rqz9Z',
         account: 'DShWnroshVbeUp28oopA3Pu7oFPDBtC1DBmPECXXAQ9n',
@@ -1125,7 +1125,7 @@ describe('Solana', () => {
         data: hex.decode('087b00000000000000'),
       });
     });
-    should('closeAccount', () => {
+    it('closeAccount', () => {
       const t = sol.token.closeAccount({
         account: '7o36UsWR1JQLpZ9PE2gn9L4SQ69CNNiWAXd4Jt7rqz9Z',
         destination: 'DShWnroshVbeUp28oopA3Pu7oFPDBtC1DBmPECXXAQ9n',
@@ -1142,7 +1142,7 @@ describe('Solana', () => {
         data: hex.decode('09'),
       });
     });
-    should('freezeAccount', () => {
+    it('freezeAccount', () => {
       const t = sol.token.freezeAccount({
         account: '7o36UsWR1JQLpZ9PE2gn9L4SQ69CNNiWAXd4Jt7rqz9Z',
         mint: 'DShWnroshVbeUp28oopA3Pu7oFPDBtC1DBmPECXXAQ9n',
@@ -1158,7 +1158,7 @@ describe('Solana', () => {
         data: hex.decode('0a'),
       });
     });
-    should('thawAccount', () => {
+    it('thawAccount', () => {
       const t = sol.token.thawAccount({
         account: '7o36UsWR1JQLpZ9PE2gn9L4SQ69CNNiWAXd4Jt7rqz9Z',
         mint: 'DShWnroshVbeUp28oopA3Pu7oFPDBtC1DBmPECXXAQ9n',
@@ -1174,7 +1174,7 @@ describe('Solana', () => {
         data: hex.decode('0b'),
       });
     });
-    should('transferChecked', () => {
+    it('transferChecked', () => {
       const t = sol.token.transferChecked({
         source: '7o36UsWR1JQLpZ9PE2gn9L4SQ69CNNiWAXd4Jt7rqz9Z',
         mint: 'DShWnroshVbeUp28oopA3Pu7oFPDBtC1DBmPECXXAQ9n',
@@ -1194,7 +1194,7 @@ describe('Solana', () => {
         data: hex.decode('0c7b000000000000000a'),
       });
     });
-    should('approveChecked', () => {
+    it('approveChecked', () => {
       const t = sol.token.approveChecked({
         source: '7o36UsWR1JQLpZ9PE2gn9L4SQ69CNNiWAXd4Jt7rqz9Z',
         mint: 'DShWnroshVbeUp28oopA3Pu7oFPDBtC1DBmPECXXAQ9n',
@@ -1214,7 +1214,7 @@ describe('Solana', () => {
         data: hex.decode('0d7b000000000000000a'),
       });
     });
-    should('mintToChecked', () => {
+    it('mintToChecked', () => {
       const t = sol.token.mintToChecked({
         mint: '7o36UsWR1JQLpZ9PE2gn9L4SQ69CNNiWAXd4Jt7rqz9Z',
         token: 'DShWnroshVbeUp28oopA3Pu7oFPDBtC1DBmPECXXAQ9n',
@@ -1232,7 +1232,7 @@ describe('Solana', () => {
         data: hex.decode('0e7b000000000000000a'),
       });
     });
-    should('burnChecked', () => {
+    it('burnChecked', () => {
       const t = sol.token.burnChecked({
         account: '7o36UsWR1JQLpZ9PE2gn9L4SQ69CNNiWAXd4Jt7rqz9Z',
         mint: 'DShWnroshVbeUp28oopA3Pu7oFPDBtC1DBmPECXXAQ9n',
@@ -1250,7 +1250,7 @@ describe('Solana', () => {
         data: hex.decode('0f7b000000000000000a'),
       });
     });
-    should('syncNative', () => {
+    it('syncNative', () => {
       const t = sol.token.syncNative({
         account: '7o36UsWR1JQLpZ9PE2gn9L4SQ69CNNiWAXd4Jt7rqz9Z',
       });
@@ -1263,7 +1263,7 @@ describe('Solana', () => {
       });
     });
 
-    should('associatedToken', () => {
+    it('associatedToken', () => {
       const t = sol.associatedToken.createAssociatedToken({
         mint: '7o36UsWR1JQLpZ9PE2gn9L4SQ69CNNiWAXd4Jt7rqz9Z',
         ata: 'DShWnroshVbeUp28oopA3Pu7oFPDBtC1DBmPECXXAQ9n',
@@ -1321,4 +1321,4 @@ describe('Solana', () => {
   });
 });
 
-should.runWhen(import.meta.url);
+it.runWhen(import.meta.url);

@@ -699,8 +699,7 @@ export function AddressLookupTables(tables: Record<string, string[]>): AddressLo
     if (!P.utils.isPlainObject(tx)) throw new TypeError('SOL.tx: tx must be an object');
     if (!P.utils.isPlainObject(tx.signatures))
       throw new TypeError('SOL.tx: tx.signatures must be an object');
-    if (!P.utils.isPlainObject(tx.msg))
-      throw new TypeError('SOL.tx: tx.msg must be an object');
+    if (!P.utils.isPlainObject(tx.msg)) throw new TypeError('SOL.tx: tx.msg must be an object');
     if (!Array.isArray(tx.msg.instructions))
       throw new TypeError('SOL.tx: tx.msg.instructions must be an array');
   };

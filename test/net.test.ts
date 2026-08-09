@@ -1,4 +1,4 @@
-import { describe, should } from '@paulmillr/jsbt/test.js';
+import { describe, it } from '@paulmillr/jsbt/test.js';
 import * as mftch from 'micro-ftch';
 import { deepStrictEqual, rejects, throws } from 'node:assert';
 import { COMMON_TOKENS } from '../src/hint.ts';
@@ -11,7 +11,7 @@ import { default as NET_TRANSFERS } from './vectors/net_transfers.mjs';
 const getKey = (url, opt) => JSON.stringify({ url: 'https://NODE_URL/', opt });
 
 describe('Net', () => {
-  should('validators', async () => {
+  it('validators', async () => {
     const archive = new ArchiveNodeProvider({
       call: async () => ({ value: undefined, context: { slot: 0 } }),
     });
@@ -26,7 +26,7 @@ describe('Net', () => {
     await rejects(archive.transfers('11111111111111111111111111111111', 0), RangeError);
     await rejects(archive.transfers('11111111111111111111111111111111', 1.5), RangeError);
   });
-  should('accountInfo rejects unsafe lamport balances', async () => {
+  it('accountInfo rejects unsafe lamport balances', async () => {
     const address = '11111111111111111111111111111111';
     const archive = new ArchiveNodeProvider({
       async call(method: string) {
@@ -49,7 +49,7 @@ describe('Net', () => {
     await rejects(archive.accountInfo(address), /accountInfo: lamports exceeds safe integer range/);
     await rejects(archive.unspent(address), /accountInfo: lamports exceeds safe integer range/);
   });
-  should(
+  it(
     'RPC binary data parsing rejects parsed payloads where raw bytes are required',
     async () => {
       const address = '11111111111111111111111111111111';
@@ -101,7 +101,7 @@ describe('Net', () => {
       await rejects((archiveTx as any).txInfo('sig1'), /txInfo: transaction expected binary data/);
     }
   );
-  should('accountInfo rejects malformed account metadata', async () => {
+  it('accountInfo rejects malformed account metadata', async () => {
     const address = '11111111111111111111111111111111';
     const accounts = [
       undefined,
@@ -137,7 +137,7 @@ describe('Net', () => {
     await rejects(archive.accountInfo(address), /accountInfo: executable must be boolean/);
     deepStrictEqual(accounts, []);
   });
-  should('RPC value helpers reject malformed result wrappers', async () => {
+  it('RPC value helpers reject malformed result wrappers', async () => {
     const address = '11111111111111111111111111111111';
     const archive = new ArchiveNodeProvider({
       async call() {
@@ -151,7 +151,7 @@ describe('Net', () => {
     );
     await rejects(archive.recentBlockHash(), /getRecentBlockhash: expected RPC value wrapper/);
   });
-  should('token amount parsing rejects malformed RPC amount strings', async () => {
+  it('token amount parsing rejects malformed RPC amount strings', async () => {
     const privateKey = new Uint8Array(32).fill(8);
     const source = sol.getAddress(privateKey);
     const mint = 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB';
@@ -262,7 +262,7 @@ describe('Net', () => {
       /txInfo: token amount must be an unsigned integer string/
     );
   });
-  should('token metadata parsing rejects invalid RPC decimals', async () => {
+  it('token metadata parsing rejects invalid RPC decimals', async () => {
     const privateKey = new Uint8Array(32).fill(8);
     const source = sol.getAddress(privateKey);
     const mint = 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB';
@@ -373,7 +373,7 @@ describe('Net', () => {
       /txInfo: token decimals must be an unsigned 8-bit integer/
     );
   });
-  should('tokenBalances rejects malformed token account entries', async () => {
+  it('tokenBalances rejects malformed token account entries', async () => {
     const source = sol.getAddress(new Uint8Array(32).fill(8));
     const mint = 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB';
     const account = {
@@ -422,7 +422,7 @@ describe('Net', () => {
       /tokenBalances: expected parsed token account info/
     );
   });
-  should('transfer parsing rejects malformed token balance metadata', async () => {
+  it('transfer parsing rejects malformed token balance metadata', async () => {
     const privateKey = new Uint8Array(32).fill(8);
     const source = sol.getAddress(privateKey);
     const [, raw] = sol.signTx(
@@ -480,7 +480,7 @@ describe('Net', () => {
     await rejects(archive.transfers(source, 10), /txInfo: token mint must be a string/);
     await rejects((archive as any).txInfo('sig1'), /txInfo: token mint must be a string/);
   });
-  should('transfer parsing rejects invalid token balance account indexes', async () => {
+  it('transfer parsing rejects invalid token balance account indexes', async () => {
     const privateKey = new Uint8Array(32).fill(8);
     const source = sol.getAddress(privateKey);
     const [, raw] = sol.signTx(
@@ -542,7 +542,7 @@ describe('Net', () => {
       /token balance accountIndex exceeds account keys/
     );
   });
-  should('transfer parsing treats missing post token balance as debit', async () => {
+  it('transfer parsing treats missing post token balance as debit', async () => {
     const privateKey = new Uint8Array(32).fill(8);
     const source = sol.getAddress(privateKey);
     const tokenAccount = '11111111111111111111111111111111';
@@ -613,7 +613,7 @@ describe('Net', () => {
       info: { log: [], raw, fee: 5000n },
     });
   });
-  should('transfer parsing rejects duplicate token balance entries', async () => {
+  it('transfer parsing rejects duplicate token balance entries', async () => {
     const privateKey = new Uint8Array(32).fill(8);
     const source = sol.getAddress(privateKey);
     const tokenAccount = '11111111111111111111111111111111';
@@ -682,7 +682,7 @@ describe('Net', () => {
     );
     deepStrictEqual(snapshots, []);
   });
-  should('transfer parsing rejects unsafe SOL balance numbers', async () => {
+  it('transfer parsing rejects unsafe SOL balance numbers', async () => {
     const privateKey = new Uint8Array(32).fill(8);
     const source = sol.getAddress(privateKey);
     const [, raw] = sol.signTx(
@@ -737,7 +737,7 @@ describe('Net', () => {
     await rejects(archive.transfers(source, 10), /slot exceeds safe integer range/);
     await rejects((archive as any).txInfo('sig1'), /slot exceeds safe integer range/);
   });
-  should('transfer parsing handles nullable block times', async () => {
+  it('transfer parsing handles nullable block times', async () => {
     const privateKey = new Uint8Array(32).fill(8);
     const source = sol.getAddress(privateKey);
     const [, raw] = sol.signTx(
@@ -792,7 +792,7 @@ describe('Net', () => {
     tx.blockTime = 9007199254740993;
     await rejects((archive as any).txInfo('sig1'), /blockTime exceeds safe integer range/);
   });
-  should('transfer parsing handles nullable log and token balance metadata', async () => {
+  it('transfer parsing handles nullable log and token balance metadata', async () => {
     const privateKey = new Uint8Array(32).fill(8);
     const source = sol.getAddress(privateKey);
     const [, raw] = sol.signTx(
@@ -853,7 +853,7 @@ describe('Net', () => {
     delete (tx.meta as any).err;
     await rejects((archive as any).txInfo('sig1'), /txInfo: transaction error status missing/);
   });
-  should('airdrop rejects unsafe lamport amounts', async () => {
+  it('airdrop rejects unsafe lamport amounts', async () => {
     const address = '11111111111111111111111111111111';
     const calls: any[][] = [];
     const archive = new ArchiveNodeProvider({
@@ -882,7 +882,7 @@ describe('Net', () => {
     await rejects(archive.airdrop(1 as any, 1n), /airdrop: expected address string/);
     deepStrictEqual(calls.length, 1);
   });
-  should('height rejects unsafe slot numbers', async () => {
+  it('height rejects unsafe slot numbers', async () => {
     const slots = [271227303, 9007199254740993];
     const archive = new ArchiveNodeProvider({
       async call() {
@@ -893,7 +893,7 @@ describe('Net', () => {
     await rejects(archive.height(), /height: slot exceeds safe integer range/);
     deepStrictEqual(slots, []);
   });
-  should('height rejects malformed response metadata', async () => {
+  it('height rejects malformed response metadata', async () => {
     const responses = [undefined, {}, { context: null }, { context: { slot: '1' } }];
     const archive = new ArchiveNodeProvider({
       async call() {
@@ -906,7 +906,7 @@ describe('Net', () => {
     await rejects(archive.height(), /height: slot must be a number/);
     deepStrictEqual(responses, []);
   });
-  should('fee rejects unsafe lamports per signature', async () => {
+  it('fee rejects unsafe lamports per signature', async () => {
     const fees = [5000, 9007199254740993];
     const archive = new ArchiveNodeProvider({
       async call() {
@@ -922,7 +922,7 @@ describe('Net', () => {
     await rejects(archive.fee(), /fee: lamportsPerSignature exceeds safe integer range/);
     deepStrictEqual(fees, []);
   });
-  should('recentBlockHash rejects malformed response metadata', async () => {
+  it('recentBlockHash rejects malformed response metadata', async () => {
     const responses = [
       { blockhash: 1, feeCalculator: { lamportsPerSignature: 5000 } },
       { blockhash: '11111111111111111111111111111111', feeCalculator: undefined },
@@ -960,7 +960,7 @@ describe('Net', () => {
     );
     deepStrictEqual(responses, []);
   });
-  should('RPC integer parsing rejects negative values', async () => {
+  it('RPC integer parsing rejects negative values', async () => {
     const privateKey = new Uint8Array(32).fill(8);
     const source = sol.getAddress(privateKey);
     const archiveAccount = new ArchiveNodeProvider({
@@ -1066,7 +1066,7 @@ describe('Net', () => {
       /txInfo: postBalances length does not match account keys/
     );
   });
-  should('transfers rejects malformed RPC list responses', async () => {
+  it('transfers rejects malformed RPC list responses', async () => {
     const address = '11111111111111111111111111111111';
     const archiveTokens = new ArchiveNodeProvider({
       async call(method: string) {
@@ -1088,7 +1088,7 @@ describe('Net', () => {
       /addressTransactions: incorrect signatures value/
     );
   });
-  should('transfer parsing rejects missing transactions', async () => {
+  it('transfer parsing rejects missing transactions', async () => {
     const address = '11111111111111111111111111111111';
     const archive = new ArchiveNodeProvider({
       async call(method: string, ...args: any[]) {
@@ -1102,7 +1102,7 @@ describe('Net', () => {
     await rejects(archive.transfers(address, 10), /txInfo: missing transaction/);
     await rejects((archive as any).txInfo('sig1'), /txInfo: missing transaction/);
   });
-  should('transfer parsing rejects missing transaction metadata', async () => {
+  it('transfer parsing rejects missing transaction metadata', async () => {
     const privateKey = new Uint8Array(32).fill(8);
     const source = sol.getAddress(privateKey);
     const [, raw] = sol.signTx(
@@ -1139,7 +1139,7 @@ describe('Net', () => {
     await rejects(archive.transfers(source, 10), /txInfo: missing transaction metadata/);
     await rejects((archive as any).txInfo('sig1'), /txInfo: missing transaction metadata/);
   });
-  should('transfers rejects malformed signature entries', async () => {
+  it('transfers rejects malformed signature entries', async () => {
     const address = '11111111111111111111111111111111';
     let calls = 0;
     const archiveSignatures = new ArchiveNodeProvider({
@@ -1157,7 +1157,7 @@ describe('Net', () => {
       /addressTransactions: expected signature string/
     );
   });
-  should('transfers rejects malformed token account entries', async () => {
+  it('transfers rejects malformed token account entries', async () => {
     const address = '11111111111111111111111111111111';
     const archiveTokens = new ArchiveNodeProvider({
       async call(method: string, ...args: any[]) {
@@ -1174,7 +1174,7 @@ describe('Net', () => {
       /transfers: token account pubkey must be a string/
     );
   });
-  should('calcTransfersDiff does not mutate caller transactions', () => {
+  it('calcTransfersDiff does not mutate caller transactions', () => {
     const txs = [
       {
         hash: 'tx',
@@ -1209,7 +1209,7 @@ describe('Net', () => {
       },
     ]);
   });
-  should('Basic', async () => {
+  it('Basic', async () => {
     const addr = 'EqywLUZcm73PSWri93X3M5TN62iFMsUPMjvWYUq89dKB'; // some account from tests
     const addr2 = '6y6nyKZKU3kuhSHdGT9YQ63DSj2tWoqKB8xui2cofqqj'; // non existent account
     const replay = mftch.replayable(fetch, NET_BASIC, { getKey, offline: true });
@@ -1266,7 +1266,7 @@ describe('Net', () => {
       },
     ]);
   });
-  should('Transfers', async () => {
+  it('Transfers', async () => {
     const addr = 'EqywLUZcm73PSWri93X3M5TN62iFMsUPMjvWYUq89dKB'; // some account from tests
     const USDT = 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB';
     const USDT_ACCOUNT = '3VDHywae15vgbG2euNPpwoHTEr2eyGLuS6EoF74kDkp4';
@@ -1348,7 +1348,7 @@ describe('Net', () => {
       },
     });
   });
-  should('isValidTokenAccount', async () => {
+  it('isValidTokenAccount', async () => {
     const addr = 'EqywLUZcm73PSWri93X3M5TN62iFMsUPMjvWYUq89dKB'; // some account from tests
     const addr2 = '6y6nyKZKU3kuhSHdGT9YQ63DSj2tWoqKB8xui2cofqqj'; // non existent account
     const replay = mftch.replayable(fetch, NET_TOKEN_VALID, { getKey, offline: true });
@@ -1411,4 +1411,4 @@ describe('Net', () => {
   });
 });
 
-should.runWhen(import.meta.url);
+it.runWhen(import.meta.url);

@@ -1602,8 +1602,7 @@ type GetTypeProgram<P extends Program> = {
  * ```
  */
 export function defineProgram<P extends Program>(p: P): TRet<GetTypeProgram<P>> {
-  if (!P.utils.isPlainObject(p))
-    throw new TypeError('"p" expected object, got type=' + typeof p);
+  if (!P.utils.isPlainObject(p)) throw new TypeError('"p" expected object, got type=' + typeof p);
   if (p.kind !== 'programNode') throw new Error('idl: wrong program node');
   // Child helpers own section-specific validation; defineProgram only wires their results together.
   const types = parseDefinedTypes(p.definedTypes) as any;

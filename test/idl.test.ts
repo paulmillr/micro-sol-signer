@@ -1,4 +1,4 @@
-import { describe, should } from '@paulmillr/jsbt/test.js';
+import { describe, it } from '@paulmillr/jsbt/test.js';
 import { base58, base64, hex } from '@scure/base';
 import { deepStrictEqual, throws } from 'node:assert';
 import { hintInstruction } from '../src/hint.ts';
@@ -7,7 +7,7 @@ import * as sol from '../src/index.ts';
 
 describe('Solana', () => {
   describe('mapType', () => {
-    should('Basic', () => {
+    it('Basic', () => {
       const VECTORS = [
         {
           type: {
@@ -380,7 +380,7 @@ describe('Solana', () => {
         }
       }
     });
-    should('fixed option rejects non-boolean prefixes', () => {
+    it('fixed option rejects non-boolean prefixes', () => {
       const t = idl.mapType({
         kind: 'optionTypeNode',
         item: { kind: 'numberTypeNode', format: 'u16', endian: 'le' },
@@ -388,7 +388,7 @@ describe('Solana', () => {
       });
       throws(() => t.decode(hex.decode('020000')));
     });
-    should('fixed option accepts zero-size fixed items', () => {
+    it('fixed option accepts zero-size fixed items', () => {
       const t = idl.mapType({
         kind: 'optionTypeNode',
         item: { kind: 'tupleTypeNode', items: [] },
@@ -400,7 +400,7 @@ describe('Solana', () => {
       deepStrictEqual(t.encode([]), Uint8Array.of(1));
       deepStrictEqual(t.decode(Uint8Array.of(1)), []);
     });
-    should('zeroable public key decodes zero sentinel as undefined', () => {
+    it('zeroable public key decodes zero sentinel as undefined', () => {
       const t = idl.mapType({
         kind: 'zeroableOptionTypeNode',
         item: { kind: 'publicKeyTypeNode' },
@@ -412,7 +412,7 @@ describe('Solana', () => {
       deepStrictEqual(t.decode(base58.decode(address)), address);
       throws(() => t.encode('11111111111111111111111111111111'));
     });
-    should('remainder option rejects empty present payloads', () => {
+    it('remainder option rejects empty present payloads', () => {
       const t = idl.mapType({
         kind: 'remainderOptionTypeNode',
         item: { kind: 'bytesTypeNode' },
@@ -435,7 +435,7 @@ describe('Solana', () => {
       deepStrictEqual(fixed.encode(42), new Uint8Array([42, 0]));
       deepStrictEqual(fixed.decode(new Uint8Array([42, 0])), 42);
     });
-    should('hidden prefix reports total encoded size', () => {
+    it('hidden prefix reports total encoded size', () => {
       const node = {
         kind: 'hiddenPrefixTypeNode',
         type: { kind: 'fixedSizeTypeNode', size: 5, type: { kind: 'stringTypeNode' } },
@@ -457,7 +457,7 @@ describe('Solana', () => {
       deepStrictEqual(t.encode('Alice'), hex.decode('2a00000000000000416c696365'));
       deepStrictEqual(tuple.encode(['Alice', 7]), hex.decode('2a00000000000000416c69636507'));
     });
-    should('hidden suffix reports total encoded size', () => {
+    it('hidden suffix reports total encoded size', () => {
       const node = {
         kind: 'hiddenSuffixTypeNode',
         type: { kind: 'fixedSizeTypeNode', size: 5, type: { kind: 'stringTypeNode' } },
@@ -479,7 +479,7 @@ describe('Solana', () => {
       deepStrictEqual(t.encode('Alice'), hex.decode('416c6963652a00000000000000'));
       deepStrictEqual(tuple.encode(['Alice', 7]), hex.decode('416c6963652a0000000000000007'));
     });
-    should('struct preserves numeric-like field declaration order', () => {
+    it('struct preserves numeric-like field declaration order', () => {
       const t = idl.mapType({
         kind: 'structTypeNode',
         fields: [
@@ -498,7 +498,7 @@ describe('Solana', () => {
       deepStrictEqual(t.encode({ 1: 7, 0: 9 }), Uint8Array.of(7, 9));
       deepStrictEqual(t.decode(Uint8Array.of(7, 9)), { 1: 7, 0: 9 });
     });
-    should('struct rejects duplicate field names', () => {
+    it('struct rejects duplicate field names', () => {
       throws(
         () =>
           idl.mapType({
@@ -519,7 +519,7 @@ describe('Solana', () => {
         /duplicate struct field name: dup/
       );
     });
-    should('enum preserves explicit zero discriminators', () => {
+    it('enum preserves explicit zero discriminators', () => {
       const t = idl.mapType({
         kind: 'enumTypeNode',
         size: { kind: 'numberTypeNode', format: 'u8', endian: 'le' },
@@ -534,7 +534,7 @@ describe('Solana', () => {
       deepStrictEqual(t.decode(Uint8Array.of(1)), { TAG: 'one', data: undefined });
     });
   });
-  should('parseAccountData', () => {
+  it('parseAccountData', () => {
     const VECTORS = [
       {
         contract: 'AddressLookupTab1e1111111111111111111111111',
@@ -868,7 +868,7 @@ describe('Solana', () => {
       deepStrictEqual(program.accounts.coders[exp.TAG].encode(exp.data), dataBytes);
     }
   });
-  should('parseInstructions', () => {
+  it('parseInstructions', () => {
     const VECTORS = [
       // Create account (1)
       {
@@ -997,7 +997,7 @@ describe('Solana', () => {
       deepStrictEqual(c.instructions.encoders[exp.TAG](exp.data), data);
     }
   });
-  should('instruction accountValueNode defaults resolve referenced accounts', () => {
+  it('instruction accountValueNode defaults resolve referenced accounts', () => {
     const c = sol.PROGRAMS.addressLookupTable.program;
     const address = '73c3aLQxue8M6Kj9Y3gxhkxzFeyB8vxYJLTw7Z8RxstQ';
     const authority = 'BvMRjBKGsr8NiAkRKC3h7tu1xvJQ2LK9hpQP783sNdQf';
@@ -1020,7 +1020,7 @@ describe('Solana', () => {
       data: { recentSlot: 1n, bump: 254, authority, address },
     });
   });
-  should('instruction encoders reject missing required accounts', () => {
+  it('instruction encoders reject missing required accounts', () => {
     throws(
       () =>
         sol.sys.transferSol({
@@ -1039,7 +1039,7 @@ describe('Solana', () => {
       /missing account: authority/
     );
   });
-  should('instruction encoders reject non-string account inputs', () => {
+  it('instruction encoders reject non-string account inputs', () => {
     throws(
       () =>
         sol.sys.transferSol({
@@ -1050,7 +1050,7 @@ describe('Solana', () => {
       /account destination must be a string/
     );
   });
-  should('instruction decoders reject malformed account metas', () => {
+  it('instruction decoders reject malformed account metas', () => {
     const inst = sol.sys.transferSol({
       source: '11111111111111111111111111111111',
       destination: '3gqrRcuQ8xprBhymXS1FctNxi8hbw3bz5EgKBUgSWiQH',
@@ -1099,7 +1099,7 @@ describe('Solana', () => {
       /account source write flag must be boolean/
     );
   });
-  should('root parse helpers preserve decoded bytes fields', () => {
+  it('root parse helpers preserve decoded bytes fields', () => {
     const program = sol.PROGRAMS.solanaConfig.program;
     const key = '11111111111111111111111111111111';
     const value = { keys: [[key, false]], data: Uint8Array.of(1, 2, 3) };
@@ -1127,7 +1127,7 @@ describe('Solana', () => {
     account.data.data[0] = 9;
     deepStrictEqual(accountData, accountBytes);
   });
-  should('defineProgram rejects duplicate defined type names', () => {
+  it('defineProgram rejects duplicate defined type names', () => {
     throws(
       () =>
         idl.defineProgram({
@@ -1156,7 +1156,7 @@ describe('Solana', () => {
       /duplicate defined type name: Dup/
     );
   });
-  should('defineProgram rejects duplicate PDA names', () => {
+  it('defineProgram rejects duplicate PDA names', () => {
     throws(
       () =>
         idl.defineProgram({
@@ -1193,7 +1193,7 @@ describe('Solana', () => {
       /duplicate PDA name: dup/
     );
   });
-  should('parsePDAs preserves numeric-like seed declaration order', () => {
+  it('parsePDAs preserves numeric-like seed declaration order', () => {
     const program = '11111111111111111111111111111111';
     const pdas = idl.parsePDAs(program, [
       {
@@ -1218,7 +1218,7 @@ describe('Solana', () => {
       idl.programAddress(program, Uint8Array.of(7), Uint8Array.of(9))
     );
   });
-  should('defineProgram preserves numeric-like instruction argument declaration order', () => {
+  it('defineProgram preserves numeric-like instruction argument declaration order', () => {
     const program = idl.defineProgram({
       kind: 'programNode',
       name: 'demo',
@@ -1248,7 +1248,7 @@ describe('Solana', () => {
     });
     deepStrictEqual(program.instructions.encoders.order({ 1: 7, 0: 9 }).data, Uint8Array.of(7, 9));
   });
-  should('defineProgram rejects duplicate instruction argument names', () => {
+  it('defineProgram rejects duplicate instruction argument names', () => {
     throws(
       () =>
         idl.defineProgram({
@@ -1277,7 +1277,7 @@ describe('Solana', () => {
       /duplicate argument name: x/
     );
   });
-  should('defineProgram rejects duplicate instruction account names', () => {
+  it('defineProgram rejects duplicate instruction account names', () => {
     throws(
       () =>
         idl.defineProgram({
@@ -1312,7 +1312,7 @@ describe('Solana', () => {
       /duplicate instruction account name: owner/
     );
   });
-  should('defineProgram rejects duplicate instruction names', () => {
+  it('defineProgram rejects duplicate instruction names', () => {
     throws(
       () =>
         idl.defineProgram({
@@ -1348,7 +1348,7 @@ describe('Solana', () => {
       /duplicate instruction name: dup/
     );
   });
-  should('defineAccounts rejects duplicate account names', () => {
+  it('defineAccounts rejects duplicate account names', () => {
     throws(
       () =>
         idl.defineAccounts([
@@ -1366,7 +1366,7 @@ describe('Solana', () => {
       /duplicate account name: dup/
     );
   });
-  should('defineIDL rejects malformed root nodes', () => {
+  it('defineIDL rejects malformed root nodes', () => {
     throws(
       () =>
         idl.defineIDL({
@@ -1385,7 +1385,7 @@ describe('Solana', () => {
       /idl: wrong root node/
     );
   });
-  should('defineIDL rejects duplicate additional program names', () => {
+  it('defineIDL rejects duplicate additional program names', () => {
     throws(
       () =>
         idl.defineIDL({
@@ -1449,7 +1449,7 @@ describe('Solana', () => {
       /duplicate additional program name: dup/
     );
   });
-  should('defineAccounts decodes boolean false account data', () => {
+  it('defineAccounts decodes boolean false account data', () => {
     const accounts = idl.defineAccounts([
       {
         kind: 'accountNode',
@@ -1463,7 +1463,7 @@ describe('Solana', () => {
     deepStrictEqual(accounts.decoder(Uint8Array.of(0)), { TAG: 'flag', data: false });
     deepStrictEqual(accounts.decoder(Uint8Array.of(1)), { TAG: 'flag', data: true });
   });
-  should('basic tx', async () => {
+  it('basic tx', async () => {
     const VECTORS = [
       // Official docs txs: https://solana.com/docs/core/tokens
       {
@@ -1785,12 +1785,12 @@ describe('Solana', () => {
     }
     deepStrictEqual(count, { ok: 10, failed: 13 });
   });
-  should('IDL type size (token)', () => {
+  it('IDL type size (token)', () => {
     deepStrictEqual(sol.PROGRAMS.token.program.accounts.coders.token.size, 165);
   });
-  should('IDL type size (token-2022)', () => {
+  it('IDL type size (token-2022)', () => {
     deepStrictEqual(sol.PROGRAMS['token-2022'].program.accounts.coders.token.size, 165);
   });
 });
 
-should.runWhen(import.meta.url);
+it.runWhen(import.meta.url);
