@@ -15,7 +15,7 @@
     "./index.d.ts": "./lib/index.d.ts"
   },
   "scripts": {
-    "benchmark:size": "npx bismar@0.1 -bs",
+    "benchmark:size": "bismar -bsm",
     "build": "tsc",
     "test": "node test/index.js"
   },
