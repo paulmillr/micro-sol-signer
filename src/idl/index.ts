@@ -970,14 +970,24 @@ const orderedStruct = (fields: readonly (readonly [string, P.CoderType<any>])[])
   return P.wrap({
     size,
     encodeStream(w: P.Writer, value: Record<string, any>) {
-      (w as any).pushObj(value, (field: (name: string, fn: () => void) => void) => {
-        for (const [name, coder] of fields) field(name, () => coder.encodeStream(w, value[name]));
+      const _w = w as any;
+      _w.pushObj(value, () => {
+        for (const [name, coder] of fields) {
+          _w.enterField(name);
+          coder.encodeStream(w, value[name]);
+          _w.exitField();
+        }
       });
     },
     decodeStream(r: P.Reader) {
       const res: Record<string, any> = {};
-      (r as any).pushObj(res, (field: (name: string, fn: () => void) => void) => {
-        for (const [name, coder] of fields) field(name, () => (res[name] = coder.decodeStream(r)));
+      const _r = r as any;
+      _r.pushObj(res, () => {
+        for (const [name, coder] of fields) {
+          _r.enterField(name);
+          res[name] = coder.decodeStream(r);
+          _r.exitField();
+        }
       });
       return res;
     },
