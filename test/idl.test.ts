@@ -1218,6 +1218,40 @@ describe('Solana', () => {
       idl.programAddress(program, Uint8Array.of(7), Uint8Array.of(9))
     );
   });
+  it('programAddress enforces Solana PDA input limits', () => {
+    const program = sol.SYS_PROGRAM;
+    throws(() => idl.programAddress('1', Uint8Array.of(1)), /program id must decode to 32 bytes/);
+    throws(() => idl.programAddress(program, new Uint8Array(33)), /at most 32 bytes/);
+    throws(
+      () => idl.programAddress(program, ...Array.from({ length: 16 }, (_, i) => Uint8Array.of(i))),
+      /at most 15 seeds/
+    );
+    deepStrictEqual(
+      idl.programAddress(program, new Uint8Array(20).fill(1), new Uint8Array(20).fill(2)),
+      'CiBxRS95MMt69J6Vg8NS6HgmYUmsa3TRAed1SnzKLG6s'
+    );
+  });
+  it('parsePDAs preserves logical seed boundaries', () => {
+    const program = sol.SYS_PROGRAM;
+    const pdas = idl.parsePDAs(program, [
+      {
+        kind: 'pdaNode',
+        name: 'pair',
+        seeds: [
+          { kind: 'variablePdaSeedNode', name: 'owner', type: { kind: 'publicKeyTypeNode' } },
+          { kind: 'variablePdaSeedNode', name: 'mint', type: { kind: 'publicKeyTypeNode' } },
+        ],
+      },
+    ]);
+    deepStrictEqual(
+      pdas.pair({ owner: sol.TOKEN_PROGRAM, mint: sol.TOKEN_PROGRAM2022 }),
+      idl.programAddress(
+        program,
+        base58.decode(sol.TOKEN_PROGRAM),
+        base58.decode(sol.TOKEN_PROGRAM2022)
+      )
+    );
+  });
   it('defineProgram preserves numeric-like instruction argument declaration order', () => {
     const program = idl.defineProgram({
       kind: 'programNode',

@@ -1103,12 +1103,17 @@ export function verifyTx(tx: TArg<TxData>) {
   if (typeof tx === 'string') tx = base64.decode(tx);
   if (tx.length > MAX_TX_SIZE) throw new Error('sol: transaction too big');
   const raw = TransactionRaw.decode(tx);
+  const header = raw.msg.data.header;
+  // Solana charges the first signer as the writable fee payer. A message with no signer, or with
+  // every signer marked readonly, cannot pass runtime message sanitation.
+  if (header.requiredSignatures === 0 || header.readSigned >= header.requiredSignatures)
+    throw new Error('sol: transaction requires a writable fee payer');
   const msg = MessageRaw.encode(raw.msg);
-  for (let i = 0; i < raw.msg.data.header.requiredSignatures; i++) {
+  for (let i = 0; i < header.requiredSignatures; i++) {
     const address = raw.msg.data.keys[i];
     const pubKey = base58.decode(address);
     const sig = raw.signatures[i];
-    if (!ed25519.verify(sig, msg, pubKey))
+    if (!ed25519.verify(sig, msg, pubKey, { zip215: false }))
       throw new Error(`sol: invalid signature sig=${sig} msg=${msg}`);
   }
 }
@@ -1538,7 +1543,7 @@ export function verifyBytes(
   msg: TArg<Uint8Array>
 ): boolean {
   if (typeof publicKey === 'string') publicKey = base58.decode(publicKey);
-  return ed25519.verify(base58.decode(signature), msg, publicKey);
+  return ed25519.verify(base58.decode(signature), msg, publicKey, { zip215: false });
 }
 
 /**

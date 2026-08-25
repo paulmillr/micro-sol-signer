@@ -179,6 +179,7 @@ type RawTxInfo = {
     err: object | null;
     fee: number;
     innerInstructions: [];
+    loadedAddresses?: { readonly: string[]; writable: string[] };
     postBalances: number[];
     postTokenBalances: RawTokenBalance[] | null;
     preBalances: number[];
@@ -188,6 +189,35 @@ type RawTxInfo = {
   };
   slot: number;
   transaction: Data;
+};
+
+const historyReferenceKeys = (
+  rawTx: ReturnType<typeof TransactionRaw.decode>,
+  loaded: RawTxInfo['meta']['loadedAddresses']
+) => {
+  const keys = rawTx.msg.data.keys;
+  if (rawTx.msg.TAG === 'legacy') return keys;
+  if (
+    !loaded ||
+    typeof loaded !== 'object' ||
+    !Array.isArray(loaded.writable) ||
+    !Array.isArray(loaded.readonly)
+  )
+    throw new Error('txInfo: missing loaded addresses for versioned transaction');
+  const writableCount = rawTx.msg.data.ALT.reduce(
+    (count, lookup) => count + lookup.writableIndexes.length,
+    0
+  );
+  const readonlyCount = rawTx.msg.data.ALT.reduce(
+    (count, lookup) => count + lookup.readonlyIndexes.length,
+    0
+  );
+  if (loaded.writable.length !== writableCount || loaded.readonly.length !== readonlyCount)
+    throw new Error('txInfo: loaded addresses do not match message lookups');
+  for (const address of [...loaded.writable, ...loaded.readonly]) {
+    if (typeof address !== 'string') throw new Error('txInfo: loaded address must be a string');
+  }
+  return [...keys, ...loaded.writable, ...loaded.readonly];
 };
 
 function rpcValue(res: any, method: string) {
@@ -285,6 +315,37 @@ function sortMulti<T>(lst: T[], ...keys: (keyof T)[]): T[] {
     }
     return 0;
   });
+}
+
+const DEFAULT_HISTORY_LIMIT = 10_000;
+const DEFAULT_HISTORY_CONCURRENCY = 64;
+
+async function boundedMap<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  let failed = false;
+  let error: unknown;
+  const run = async () => {
+    while (!failed) {
+      const index = next++;
+      if (index >= items.length) return;
+      try {
+        results[index] = await worker(items[index], index);
+      } catch (cause) {
+        if (!failed) {
+          failed = true;
+          error = cause;
+        }
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, run));
+  if (failed) throw error;
+  return results;
 }
 
 type Encoding = 'base58' | 'base64' | 'base64+zstd' | 'jsonParsed';
@@ -558,15 +619,18 @@ export class ArchiveNodeProvider {
   }
   /**
    * @returns Transfer view reconstructed from raw transaction bytes plus RPC balance metadata. RPC
-   * token-balance `accountIndex` values must resolve against the raw message keys, and lamport
-   * balance numbers must fit JS's safe integer range before bigint conversion.
+   * token-balance `accountIndex` values must resolve against static and loaded message keys, and
+   * lamport balance numbers must fit JS's safe integer range before bigint conversion.
    */
-  private async txInfo(signature: string): Promise<TxTransfers> {
+  private async txInfo(
+    signature: string,
+    expectedAddresses?: ReadonlySet<string>,
+    addressesReady: Promise<void> = Promise.resolve()
+  ): Promise<TxTransfers> {
     // json and jsonParsed returns parsed instructions data, it is hard to re-build actual raw tx
     // from it
     // base64 doesn't return accountKeys (needed for balances), but we can get it from parsing raw
     // tx
-    // NOTE: we support only legacy transactions for now (no versioned).
     const tx: RawTxInfo = await this.rpc.call('getTransaction', signature, {
       encoding: 'base64',
       commitment: 'confirmed',
@@ -582,7 +646,7 @@ export class ArchiveNodeProvider {
     const rawBytes = decodeBytes(tx.transaction, 'txInfo: transaction');
     verifyTx(rawBytes);
     const rawTx = TransactionRaw.decode(rawBytes);
-    const keys = rawTx.msg.data.keys;
+    const keys = historyReferenceKeys(rawTx, tx.meta.loadedAddresses);
     // Slot and fee are accounting metadata too; unsafe JSON numbers may already be rounded.
     const block = safeRpcInteger(tx.slot, 'txInfo: slot');
     const fee = safeRpcInteger(tx.meta.fee, 'txInfo: fee');
@@ -662,6 +726,18 @@ export class ArchiveNodeProvider {
           : { to: tokenAccount, value: amount, ...rest }
       );
     }
+    const wireSignature = rawTx.signatures[0];
+    if (!wireSignature || base58.encode(wireSignature) !== signature)
+      throw new Error('txInfo: transaction signature mismatch');
+    if (expectedAddresses) {
+      // A signature may appear in several address crawls; require the returned transaction to
+      // reference every source address that reported it.
+      await addressesReady;
+      for (const expectedAddress of expectedAddresses) {
+        if (!keys.includes(expectedAddress))
+          throw new Error('txInfo: transaction does not reference queried address');
+      }
+    }
     return {
       hash: signature,
       ...(timestamp === undefined ? {} : { timestamp }),
@@ -688,6 +764,7 @@ export class ArchiveNodeProvider {
     perRequest = 1000
   ) {
     let lastTx: string | undefined = undefined;
+    const seenCursors = new Set<string>();
     for (;;) {
       const data: ConfirmedSignature[] = await this.rpc.call('getSignaturesForAddress', address, {
         encoding: 'jsonParsed',
@@ -703,53 +780,173 @@ export class ArchiveNodeProvider {
         if (!item || typeof item.signature !== 'string')
           throw new Error('addressTransactions: expected signature string');
       }
+      // Solana returns newest-to-oldest. Capture the oldest item before presentation sorting, and
+      // reject cyclic or repeated pages instead of crawling forever.
+      const next = data[data.length - 1].signature;
+      if (seenCursors.has(next))
+        throw new Error('addressTransactions: pagination made no progress');
+      seenCursors.add(next);
+      lastTx = next;
       sortMulti(data, 'slot', 'blockTime');
-      lastTx = data[0].signature;
       for (const { signature } of data) cb(signature);
     }
   }
   /**
    * Returns all transaction information for address.
    * @param address - Solana address.
+   * @param perRequest - Maximum signatures requested in each RPC page.
+   * @param maxTransactions - Maximum history entries scanned across the address and its token
+   * accounts. The finite default prevents unbounded retention; raise it explicitly for archival
+   * crawls.
+   * @param concurrency - Maximum workers in each address-page and transaction RPC pool.
    * @returns Transfer summaries for `address` plus any legacy SPL Token accounts returned by
    * `getTokenAccountsByOwner`. Duplicate signatures are fetched once and the final array is
    * sorted by `block`/`hash`; transaction parsing still inherits `txInfo()`'s RPC-metadata
    * validation and numeric limits.
    */
-  async transfers(address: string, perRequest = 1000): Promise<TxTransfers[]> {
+  async transfers(
+    address: string,
+    perRequest = 1000,
+    maxTransactions = DEFAULT_HISTORY_LIMIT,
+    concurrency = DEFAULT_HISTORY_CONCURRENCY
+  ): Promise<TxTransfers[]> {
     if (typeof address !== 'string')
       throw new TypeError(`transfers: expected address string, got ${typeof address}`);
     if (typeof perRequest !== 'number')
       throw new TypeError(`transfers: expected perRequest number, got ${typeof perRequest}`);
     if (!Number.isSafeInteger(perRequest) || perRequest <= 0)
       throw new RangeError(`transfers: wrong perRequest ${perRequest}, expected positive integer`);
-    const txPromises: Record<string, Promise<TxTransfers>> = {};
-    const fetchTx = (signature: string) => {
-      if (signature in txPromises) return;
-      txPromises[signature] = this.txInfo(signature);
+    if (typeof maxTransactions !== 'number')
+      throw new TypeError(
+        `transfers: expected maxTransactions number, got ${typeof maxTransactions}`
+      );
+    if (!Number.isSafeInteger(maxTransactions) || maxTransactions <= 0)
+      throw new RangeError(
+        `transfers: wrong maxTransactions ${maxTransactions}, expected positive integer`
+      );
+    if (typeof concurrency !== 'number')
+      throw new TypeError(`transfers: expected concurrency number, got ${typeof concurrency}`);
+    if (!Number.isSafeInteger(concurrency) || concurrency <= 0)
+      throw new RangeError(
+        `transfers: wrong concurrency ${concurrency}, expected positive integer`
+      );
+    let addressesReadyResolve!: () => void;
+    const addressesReady = new Promise<void>((resolve) => (addressesReadyResolve = resolve));
+    let addressesReleased = false;
+    const releaseAddresses = () => {
+      if (addressesReleased) return;
+      addressesReleased = true;
+      addressesReadyResolve();
     };
-    const pMain = this.addressTransactions(address, fetchTx, perRequest);
-    const tokens: TokenAccountsOwner[] = await this.jsonCall('getTokenAccountsByOwner', address, {
-      programId: TOKEN_PROGRAM,
-    });
-    if (!Array.isArray(tokens)) {
-      await pMain;
-      throw new Error('transfers: incorrect tokens value');
-    }
-    const tokenAddresses = [];
-    for (const token of tokens) {
-      try {
-        tokenAddresses.push(tokenAccountPubkey(token, 'transfers'));
-      } catch (e) {
-        await pMain;
-        throw e;
+    type TxJob = [signature: string, addresses: Set<string>];
+    const txJobs: TxJob[] = [];
+    const txs: TxTransfers[] = [];
+    let txActive = 0;
+    let txClosed = false;
+    let txFailed = false;
+    let txError: unknown;
+    let txDoneResolve!: () => void;
+    const txDone = new Promise<void>((resolve) => (txDoneResolve = resolve));
+    const settleTxQueue = () => {
+      if (txActive === 0 && (txFailed || (txClosed && txJobs.length === 0))) txDoneResolve();
+    };
+    const pumpTxQueue = () => {
+      while (!txFailed && txActive < concurrency && txJobs.length) {
+        const [signature, expectedAddresses] = txJobs.shift()!;
+        txActive++;
+        const finish = () => {
+          txActive--;
+          pumpTxQueue();
+        };
+        void this.txInfo(signature, expectedAddresses, addressesReady).then(
+          (tx) => {
+            txs.push(tx);
+            finish();
+          },
+          (error) => {
+            if (!txFailed) {
+              txFailed = true;
+              txError = error;
+              txJobs.length = 0;
+            }
+            finish();
+          }
+        );
       }
+      settleTxQueue();
+    };
+    const abortTxQueue = (error: unknown) => {
+      if (!txFailed) {
+        txFailed = true;
+        txError = error;
+        txJobs.length = 0;
+      }
+      settleTxQueue();
+    };
+    const txAddresses = new Map<string, Set<string>>();
+    let historyEntries = 0;
+    const collect = (target: string) => (signature: string) => {
+      if (txFailed) throw txError;
+      if (++historyEntries > maxTransactions)
+        throw new Error(`transfers: history limit ${maxTransactions} exceeded`);
+      const addresses = txAddresses.get(signature);
+      if (addresses) addresses.add(target);
+      else {
+        const expectedAddresses = new Set([target]);
+        txAddresses.set(signature, expectedAddresses);
+        txJobs.push([signature, expectedAddresses]);
+        pumpTxQueue();
+      }
+    };
+    // Begin the main crawl alongside token-account discovery so batching transports retain their
+    // existing request shape. Attach a handler immediately in case it rejects first.
+    const mainPages = this.addressTransactions(address, collect(address), perRequest);
+    void mainPages.catch(() => {});
+    let tokens: TokenAccountsOwner[];
+    try {
+      tokens = await this.jsonCall('getTokenAccountsByOwner', address, {
+        programId: TOKEN_PROGRAM,
+      });
+      if (!Array.isArray(tokens)) throw new Error('transfers: incorrect tokens value');
+      if (tokens.length + 1 > maxTransactions)
+        throw new Error(`transfers: history address limit ${maxTransactions} exceeded`);
+    } catch (error) {
+      await Promise.allSettled([mainPages]);
+      releaseAddresses();
+      abortTxQueue(error);
+      await txDone;
+      throw error;
     }
-    await Promise.all([
-      pMain,
-      ...tokenAddresses.map((token) => this.addressTransactions(token, fetchTx, perRequest)),
-    ]);
-    const txs = await Promise.all(Object.values(txPromises));
+    const tokenTargets = new Set<string>();
+    try {
+      for (const token of tokens) tokenTargets.add(tokenAccountPubkey(token, 'transfers'));
+      tokenTargets.delete(address);
+    } catch (error) {
+      await Promise.allSettled([mainPages]);
+      releaseAddresses();
+      abortTxQueue(error);
+      await txDone;
+      throw error;
+    }
+    const tokenPages = async () => {
+      // The main crawl occupies one slot until it finishes. With a single-slot limit, finish it
+      // before starting token histories; otherwise reserve its slot from the token worker pool.
+      if (concurrency === 1) await mainPages;
+      await boundedMap([...tokenTargets], Math.max(1, concurrency - 1), async (target) => {
+        await this.addressTransactions(target, collect(target), perRequest);
+      });
+    };
+    const pageResults = await Promise.allSettled([mainPages, tokenPages()]);
+    const pageError = pageResults.find((result) => result.status === 'rejected');
+    releaseAddresses();
+    if (pageError && pageError.status === 'rejected') abortTxQueue(pageError.reason);
+    else {
+      txClosed = true;
+      pumpTxQueue();
+    }
+    await txDone;
+    if (pageError && pageError.status === 'rejected') throw pageError.reason;
+    if (txFailed) throw txError;
     sortMulti(txs, 'block', 'hash');
     return txs;
   }
@@ -840,7 +1037,18 @@ export function calcTransfersDiff(transfers: TxTransfers[]): (TxTransfers & Bala
       }
     }
     for (const tt of t.tokenTransfers) {
-      if (!tokenBalances[tt.contract]) tokenBalances[tt.contract] = {};
+      // Inherited record keys must become safe own data properties before lookup. In particular,
+      // assigning "__proto__" directly would invoke Object.prototype's legacy setter.
+      if (tt.contract in Object.prototype) {
+        if (!Object.hasOwn(tokenBalances, tt.contract)) {
+          Object.defineProperty(tokenBalances, tt.contract, {
+            value: {},
+            writable: true,
+            enumerable: true,
+            configurable: true,
+          });
+        }
+      } else if (!tokenBalances[tt.contract]) tokenBalances[tt.contract] = {};
       const token = tokenBalances[tt.contract];
       if (tt.from) {
         if (token[tt.from] === undefined) token[tt.from] = _0n;

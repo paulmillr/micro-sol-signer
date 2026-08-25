@@ -25,6 +25,16 @@ describe('Net', () => {
     await rejects(archive.transfers('11111111111111111111111111111111', '20' as any), TypeError);
     await rejects(archive.transfers('11111111111111111111111111111111', 0), RangeError);
     await rejects(archive.transfers('11111111111111111111111111111111', 1.5), RangeError);
+    await rejects(
+      archive.transfers('11111111111111111111111111111111', 20, '100' as any),
+      TypeError
+    );
+    await rejects(archive.transfers('11111111111111111111111111111111', 20, 0), RangeError);
+    await rejects(
+      archive.transfers('11111111111111111111111111111111', 20, 100, '8' as any),
+      TypeError
+    );
+    await rejects(archive.transfers('11111111111111111111111111111111', 20, 100, 0), RangeError);
   });
   it('accountInfo rejects unsafe lamport balances', async () => {
     const address = '11111111111111111111111111111111';
@@ -101,6 +111,150 @@ describe('Net', () => {
       await rejects((archiveTx as any).txInfo('sig1'), /txInfo: transaction expected binary data/);
     }
   );
+  it('history rejects substituted or unrelated RPC transactions', async () => {
+    const signed = (privateKey: Uint8Array) => {
+      const source = sol.getAddress(privateKey);
+      return {
+        source,
+        signed: sol.signTx(
+          privateKey,
+          sol.TransactionRaw.encode({
+            signatures: [new Uint8Array(64)],
+            msg: {
+              TAG: 'legacy',
+              data: {
+                header: { requiredSignatures: 1, readSigned: 0, readUnsigned: 1 },
+                keys: [source, sol.SYS_PROGRAM],
+                blockhash: sol.SYS_PROGRAM,
+                instructions: [],
+              },
+            },
+          })
+        ),
+      };
+    };
+    const txA = signed(new Uint8Array(32).fill(8));
+    const txB = signed(new Uint8Array(32).fill(9));
+    const responseB = {
+      blockTime: 1,
+      slot: 1,
+      transaction: [txB.signed[1], 'base64'],
+      meta: {
+        err: null,
+        fee: 5000,
+        innerInstructions: [],
+        logMessages: [],
+        postBalances: [0, 0],
+        preBalances: [0, 0],
+        postTokenBalances: [],
+        preTokenBalances: [],
+        rewards: [],
+        status: { Ok: null },
+      },
+    };
+    const archive = new ArchiveNodeProvider({
+      async call(method: string, ...args: any[]) {
+        if (method === 'getTokenAccountsByOwner') return { value: [] };
+        if (method === 'getSignaturesForAddress')
+          return args[1].before ? [] : [{ signature: txB.signed[0] }];
+        if (method === 'getTransaction') return responseB;
+        throw new Error(`unexpected ${method}`);
+      },
+    });
+    await rejects((archive as any).txInfo(txA.signed[0]), /txInfo: transaction signature mismatch/);
+    await rejects(
+      archive.transfers(txA.source, 10),
+      /txInfo: transaction does not reference queried address/
+    );
+  });
+  it('transfer parsing resolves versioned lookup-table addresses', async () => {
+    const privateKey = new Uint8Array(32).fill(8);
+    const source = sol.getAddress(privateKey);
+    const loadedWritable = sol.TOKEN_PROGRAM2022;
+    const loadedReadonly = sol.ASSOCIATED_TOKEN_PROGRAM;
+    const mint = 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB';
+    const [signature, raw] = sol.signTx(
+      privateKey,
+      sol.TransactionRaw.encode({
+        signatures: [new Uint8Array(64)],
+        msg: {
+          TAG: 0,
+          data: {
+            header: { requiredSignatures: 1, readSigned: 0, readUnsigned: 0 },
+            keys: [source],
+            blockhash: sol.SYS_PROGRAM,
+            instructions: [],
+            ALT: [
+              {
+                account: sol.TOKEN_PROGRAM,
+                writableIndexes: [0],
+                readonlyIndexes: [1],
+              },
+            ],
+          },
+        },
+      })
+    );
+    const tokenBalance = (amount: string) => ({
+      accountIndex: 2,
+      mint,
+      owner: source,
+      uiTokenAmount: { amount, decimals: 6, uiAmount: null, uiAmountString: amount },
+    });
+    const response = {
+      blockTime: 1,
+      slot: 1,
+      transaction: [raw, 'base64'],
+      meta: {
+        err: null,
+        fee: 5000,
+        innerInstructions: [],
+        loadedAddresses: { writable: [loadedWritable], readonly: [loadedReadonly] },
+        logMessages: [],
+        postBalances: [9, 2, 0],
+        preBalances: [10, 0, 0],
+        postTokenBalances: [tokenBalance('9')],
+        preTokenBalances: [tokenBalance('7')],
+        rewards: [],
+        status: { Ok: null },
+      },
+    };
+    const archive = new ArchiveNodeProvider({
+      async call(method: string, ...args: any[]) {
+        if (method === 'getTokenAccountsByOwner') return { value: [] };
+        if (method === 'getSignaturesForAddress') return args[1].before ? [] : [{ signature }];
+        if (method === 'getTransaction') return response;
+        throw new Error(`unexpected ${method}`);
+      },
+    });
+    const parsed = {
+      hash: signature,
+      timestamp: 1000,
+      block: 1,
+      transfers: [
+        { from: source, value: 1n },
+        { to: loadedWritable, value: 2n },
+      ],
+      tokenTransfers: [
+        {
+          to: loadedReadonly,
+          value: 2n,
+          contract: mint,
+          owner: source,
+          decimals: 6,
+        },
+      ],
+      reverted: false,
+      info: { log: [], raw, fee: 5000n },
+    };
+    deepStrictEqual(await (archive as any).txInfo(signature), parsed);
+    deepStrictEqual(await archive.transfers(loadedWritable, 10), [parsed]);
+    response.meta.loadedAddresses.writable = [];
+    await rejects(
+      (archive as any).txInfo(signature),
+      /txInfo: loaded addresses do not match message lookups/
+    );
+  });
   it('accountInfo rejects malformed account metadata', async () => {
     const address = '11111111111111111111111111111111';
     const accounts = [
@@ -547,7 +701,7 @@ describe('Net', () => {
     const source = sol.getAddress(privateKey);
     const tokenAccount = '11111111111111111111111111111111';
     const mint = 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB';
-    const [, raw] = sol.signTx(
+    const [signature, raw] = sol.signTx(
       privateKey,
       sol.TransactionRaw.encode({
         signatures: [new Uint8Array(64)],
@@ -601,8 +755,8 @@ describe('Net', () => {
         throw new Error(`unexpected ${method}`);
       },
     });
-    deepStrictEqual(await (archive as any).txInfo('sig1'), {
-      hash: 'sig1',
+    deepStrictEqual(await (archive as any).txInfo(signature), {
+      hash: signature,
       timestamp: 1000,
       block: 1,
       transfers: [],
@@ -740,7 +894,7 @@ describe('Net', () => {
   it('transfer parsing handles nullable block times', async () => {
     const privateKey = new Uint8Array(32).fill(8);
     const source = sol.getAddress(privateKey);
-    const [, raw] = sol.signTx(
+    const [signature, raw] = sol.signTx(
       privateKey,
       sol.TransactionRaw.encode({
         signatures: [new Uint8Array(64)],
@@ -781,8 +935,8 @@ describe('Net', () => {
         throw new Error(`unexpected ${method}`);
       },
     });
-    deepStrictEqual(await (archive as any).txInfo('sig1'), {
-      hash: 'sig1',
+    deepStrictEqual(await (archive as any).txInfo(signature), {
+      hash: signature,
       block: 1,
       transfers: [],
       tokenTransfers: [],
@@ -795,7 +949,7 @@ describe('Net', () => {
   it('transfer parsing handles nullable log and token balance metadata', async () => {
     const privateKey = new Uint8Array(32).fill(8);
     const source = sol.getAddress(privateKey);
-    const [, raw] = sol.signTx(
+    const [signature, raw] = sol.signTx(
       privateKey,
       sol.TransactionRaw.encode({
         signatures: [new Uint8Array(64)],
@@ -830,14 +984,13 @@ describe('Net', () => {
     const archive = new ArchiveNodeProvider({
       async call(method: string, ...args: any[]) {
         if (method === 'getTokenAccountsByOwner') return { value: [] };
-        if (method === 'getSignaturesForAddress')
-          return args[1].before ? [] : [{ signature: 'sig1' }];
+        if (method === 'getSignaturesForAddress') return args[1].before ? [] : [{ signature }];
         if (method === 'getTransaction') return tx;
         throw new Error(`unexpected ${method}`);
       },
     });
     const parsed = {
-      hash: 'sig1',
+      hash: signature,
       timestamp: 1000,
       block: 1,
       transfers: [{ to: source, value: 1n }],
@@ -845,13 +998,13 @@ describe('Net', () => {
       reverted: false,
       info: { log: [], raw, fee: 5000n },
     };
-    deepStrictEqual(await (archive as any).txInfo('sig1'), parsed);
+    deepStrictEqual(await (archive as any).txInfo(signature), parsed);
     deepStrictEqual(await archive.transfers(source, 10), [parsed]);
     tx.meta.logMessages = [1] as any;
-    await rejects((archive as any).txInfo('sig1'), /txInfo: logMessages item must be a string/);
+    await rejects((archive as any).txInfo(signature), /txInfo: logMessages item must be a string/);
     tx.meta.logMessages = [];
     delete (tx.meta as any).err;
-    await rejects((archive as any).txInfo('sig1'), /txInfo: transaction error status missing/);
+    await rejects((archive as any).txInfo(signature), /txInfo: transaction error status missing/);
   });
   it('airdrop rejects unsafe lamport amounts', async () => {
     const address = '11111111111111111111111111111111';
@@ -1157,6 +1310,98 @@ describe('Net', () => {
       /addressTransactions: expected signature string/
     );
   });
+  it('history pagination makes progress and uses bounded workers', async () => {
+    const address = '11111111111111111111111111111111';
+    const cursors: (string | undefined)[] = [];
+    const collected: string[] = [];
+    const cursorArchive = new ArchiveNodeProvider({
+      async call(method: string, ...args: any[]) {
+        if (method !== 'getSignaturesForAddress') throw new Error(`unexpected ${method}`);
+        cursors.push(args[1].before);
+        return args[1].before
+          ? []
+          : [
+              { signature: 'newer', slot: 1, blockTime: 1 },
+              { signature: 'older', slot: 1, blockTime: 1 },
+            ];
+      },
+    });
+    await (cursorArchive as any).addressTransactions(
+      address,
+      (signature: string) => collected.push(signature),
+      2
+    );
+    deepStrictEqual(cursors, [undefined, 'older']);
+    deepStrictEqual(collected, ['newer', 'older']);
+
+    let cycleCalls = 0;
+    const cycleArchive = new ArchiveNodeProvider({
+      async call() {
+        cycleCalls++;
+        return [{ signature: 'same', slot: 1, blockTime: 1 }];
+      },
+    });
+    await rejects(
+      (cycleArchive as any).addressTransactions(address, () => {}, 1),
+      /pagination made no progress/
+    );
+    deepStrictEqual(cycleCalls, 2);
+
+    const tokenAddresses = Array.from({ length: 5 }, (_, i) => `token${i}`);
+    const signatures = Array.from({ length: 12 }, (_, i) => ({
+      signature: `sig${i}`,
+      slot: i,
+      blockTime: i,
+    }));
+    let pageActive = 0;
+    let maxPageActive = 0;
+    const archive = new ArchiveNodeProvider({
+      async call(method: string, ...args: any[]) {
+        if (method === 'getTokenAccountsByOwner')
+          return { value: tokenAddresses.map((pubkey) => ({ pubkey })) };
+        if (method === 'getSignaturesForAddress') {
+          pageActive++;
+          maxPageActive = Math.max(maxPageActive, pageActive);
+          await new Promise<void>((resolve) => setImmediate(resolve));
+          pageActive--;
+          return args[0] === address && !args[1].before ? signatures : [];
+        }
+        throw new Error(`unexpected ${method}`);
+      },
+    });
+    let txActive = 0;
+    let maxTxActive = 0;
+    (archive as any).txInfo = async (signature: string) => {
+      txActive++;
+      maxTxActive = Math.max(maxTxActive, txActive);
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      txActive--;
+      return {
+        hash: signature,
+        block: Number(signature.slice(3)),
+        transfers: [],
+        tokenTransfers: [],
+        reverted: false,
+        info: { raw: '', log: [], fee: 0n },
+      };
+    };
+    deepStrictEqual((await archive.transfers(address, 20, 100, 3)).length, 12);
+    deepStrictEqual(maxPageActive, 3);
+    deepStrictEqual(maxTxActive, 3);
+
+    let limitedTxCalls = 0;
+    const limited = new ArchiveNodeProvider({
+      async call(method: string, ...args: any[]) {
+        if (method === 'getTokenAccountsByOwner') return { value: [] };
+        if (method === 'getSignaturesForAddress')
+          return args[1].before ? [] : signatures.slice(0, 4);
+        throw new Error(`unexpected ${method}`);
+      },
+    });
+    (limited as any).txInfo = async () => limitedTxCalls++;
+    await rejects(limited.transfers(address, 20, 3, 2), /history limit 3 exceeded/);
+    deepStrictEqual(limitedTxCalls, 3);
+  });
   it('transfers rejects malformed token account entries', async () => {
     const address = '11111111111111111111111111111111';
     const archiveTokens = new ArchiveNodeProvider({
@@ -1173,6 +1418,35 @@ describe('Net', () => {
       archiveTokens.transfers(address, 10),
       /transfers: token account pubkey must be a string/
     );
+  });
+  it('transfers observes transaction rejection while pagination is pending', async () => {
+    const address = '11111111111111111111111111111111';
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', onUnhandled);
+    let signatureCalls = 0;
+    const delay = <T>(value: T) =>
+      new Promise<T>((resolve) => setTimeout(() => resolve(value), 10));
+    try {
+      const archive = new ArchiveNodeProvider({
+        async call(method: string) {
+          if (method === 'getSignaturesForAddress') {
+            signatureCalls++;
+            return signatureCalls === 1
+              ? [{ slot: 1, blockTime: 1, signature: 'sig1' }]
+              : delay([]);
+          }
+          if (method === 'getTokenAccountsByOwner') return delay({ value: [] });
+          if (method === 'getTransaction') throw new Error('early transaction failure');
+          throw new Error(`unexpected ${method}`);
+        },
+      });
+      await rejects(archive.transfers(address, 10), /early transaction failure/);
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      deepStrictEqual(unhandled, []);
+    } finally {
+      process.removeListener('unhandledRejection', onUnhandled);
+    }
   });
   it('calcTransfersDiff does not mutate caller transactions', () => {
     const txs = [
@@ -1208,6 +1482,24 @@ describe('Net', () => {
         info: { raw: '', log: [], fee: 0n },
       },
     ]);
+  });
+  it('calcTransfersDiff does not allow prototype pollution', () => {
+    const property = 'microSolSignerPolluted';
+    try {
+      const [result] = calcTransfersDiff([
+        {
+          hash: 'tx',
+          transfers: [],
+          tokenTransfers: [{ contract: '__proto__', from: property, value: 1n, decimals: 0 }],
+          reverted: false,
+          info: { raw: '', log: [], fee: 0n },
+        },
+      ]);
+      deepStrictEqual((Object.prototype as any)[property], undefined);
+      deepStrictEqual(result.tokenBalances['__proto__'][property], -1n);
+    } finally {
+      delete (Object.prototype as any)[property];
+    }
   });
   it('Basic', async () => {
     const addr = 'EqywLUZcm73PSWri93X3M5TN62iFMsUPMjvWYUq89dKB'; // some account from tests
@@ -1279,7 +1571,9 @@ describe('Net', () => {
         batchSize: 20,
       })
     );
-    const res = await archive.transfers(addr, 20);
+    // The replay fixture was recorded with eager batching; use the explicit maximum worker count
+    // so its historical batch boundaries remain stable while production defaults stay bounded.
+    const res = await archive.transfers(addr, 20, 10_000, 10_000);
     const diff = calcTransfersDiff(res);
     const mins = { sol: 0n, usdt: 0n, usdc: 0n };
     for (const tx of diff) {

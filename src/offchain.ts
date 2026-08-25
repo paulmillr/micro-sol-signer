@@ -7,9 +7,54 @@ import { deepFreeze, type CoderType as IDLCoderType } from './idl/index.ts';
 // This is compatible with solana-cli sign-offchain-message
 
 // Offchain "ascii" mode is limited to printable bytes; control characters stay in utf8 mode.
-const isAscii = (data: TArg<Uint8Array>) => data.every((b) => b >= 0x20 && b <= 0x7e);
+const isAscii = (data: TArg<Uint8Array>) => {
+  for (let i = 0; i < data.length; i++) {
+    if (data[i] < 0x20 || data[i] > 0x7e) return false;
+  }
+  return true;
+};
 // Ledger-compatible cutoff for plain ascii/utf8 display mode; longer messages use utf8ext.
 const MAX_LEN_LEDGER = 1212;
+const MAX_LEN_EXTENDED = 65515;
+
+// Strict UTF-8 validation without allocating the decoded string.
+const isValidUtf8 = (data: TArg<Uint8Array>) => {
+  for (let i = 0; i < data.length; i++) {
+    const b = data[i];
+    if (b <= 0x7f) continue;
+    if (b >= 0xc2 && b <= 0xdf) {
+      if ((data[++i] & 0xc0) !== 0x80) return false;
+    } else if (b === 0xe0) {
+      if (data[++i] < 0xa0 || data[i] > 0xbf || (data[++i] & 0xc0) !== 0x80) return false;
+    } else if ((b >= 0xe1 && b <= 0xec) || (b >= 0xee && b <= 0xef)) {
+      if ((data[++i] & 0xc0) !== 0x80 || (data[++i] & 0xc0) !== 0x80) return false;
+    } else if (b === 0xed) {
+      if (data[++i] < 0x80 || data[i] > 0x9f || (data[++i] & 0xc0) !== 0x80) return false;
+    } else if (b === 0xf0) {
+      if (
+        data[++i] < 0x90 ||
+        data[i] > 0xbf ||
+        (data[++i] & 0xc0) !== 0x80 ||
+        (data[++i] & 0xc0) !== 0x80
+      )
+        return false;
+    } else if (b >= 0xf1 && b <= 0xf3) {
+      if ((data[++i] & 0xc0) !== 0x80 || (data[++i] & 0xc0) !== 0x80 || (data[++i] & 0xc0) !== 0x80)
+        return false;
+    } else if (b === 0xf4) {
+      if (
+        data[++i] < 0x80 ||
+        data[i] > 0x8f ||
+        (data[++i] & 0xc0) !== 0x80 ||
+        (data[++i] & 0xc0) !== 0x80
+      )
+        return false;
+    } else {
+      return false;
+    }
+  }
+  return true;
+};
 
 type MessageV0Type = {
   format: string;
@@ -67,8 +112,17 @@ const MessageRawCodec: P.CoderType<MessageRawType> = /* @__PURE__ */ P.validate(
   }),
   (msg) => {
     if (msg.version.TAG !== 0) throw new Error('Offchain.MessageRaw: unknown version');
-    // 16-byte magic plus version/format/length headers leave 65515 msg bytes in the u16 envelope.
-    if (msg.version.data.msg.length > 65515) throw new Error('Offchain.MessageRaw: size limit');
+    const { format, msg: data } = msg.version.data;
+    const valid =
+      data.length > 0 &&
+      (format === 'ascii'
+        ? data.length <= MAX_LEN_LEDGER && isAscii(data)
+        : format === 'utf8'
+          ? data.length <= MAX_LEN_LEDGER && isValidUtf8(data)
+          : format === 'utf8ext'
+            ? data.length <= MAX_LEN_EXTENDED && isValidUtf8(data)
+            : false);
+    if (!valid) throw new Error('Offchain.MessageRaw: invalid message preamble');
     return msg;
   }
 ) as unknown as P.CoderType<MessageRawType>;
@@ -132,6 +186,8 @@ export const Offchain: TRet<OffchainHelpers> = /* @__PURE__ */ deepFreeze({
   verify(signature: string, publicKey: TArg<Uint8Array | string>, msg: string, version: 0 = 0) {
     // Accept either raw 32-byte public keys or base58-encoded Solana addresses.
     if (typeof publicKey === 'string') publicKey = base58.decode(publicKey);
-    return ed25519.verify(base58.decode(signature), Message.encode({ version, msg }), publicKey);
+    return ed25519.verify(base58.decode(signature), Message.encode({ version, msg }), publicKey, {
+      zip215: false,
+    });
   },
 });

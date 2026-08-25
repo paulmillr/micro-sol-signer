@@ -91,6 +91,12 @@ describe('Solana', () => {
       deepStrictEqual(sol.shortU16.encode(exp), bytes);
     }
     deepStrictEqual(sol.shortU16.decode(new Uint8Array(0)), 0);
+    for (const value of [2 ** 31, Number.MAX_SAFE_INTEGER]) {
+      deepStrictEqual(sol.shortU16.decode(sol.shortU16.encode(value)), value);
+    }
+    throws(() => sol.shortU16.encode(-1), /non-negative safe integer/);
+    throws(() => sol.shortU16.encode(1.5), /non-negative safe integer/);
+    throws(() => sol.shortU16.encode(Number.MAX_SAFE_INTEGER + 1), /non-negative safe integer/);
   });
   it('message', () => {
     const data = {
@@ -378,6 +384,35 @@ describe('Solana', () => {
     );
     deepStrictEqual(sol.getMessageFromTransaction(base64.encode(expSigned)), message);
     deepStrictEqual(sol.getMessageFromTransaction(base64.encode(expUnsigned)), message);
+  });
+  it('verifyTx rejects transactions without a writable signer', () => {
+    const blockhash = '11111111111111111111111111111111';
+    const noSigners = sol.TransactionRaw.encode({
+      signatures: [],
+      msg: {
+        TAG: 'legacy',
+        data: {
+          header: { requiredSignatures: 0, readSigned: 0, readUnsigned: 1 },
+          keys: [sol.SYS_PROGRAM],
+          blockhash,
+          instructions: [],
+        },
+      },
+    });
+    const readonlySigner = sol.TransactionRaw.encode({
+      signatures: [new Uint8Array(64)],
+      msg: {
+        TAG: 'legacy',
+        data: {
+          header: { requiredSignatures: 1, readSigned: 1, readUnsigned: 0 },
+          keys: [sol.SYS_PROGRAM],
+          blockhash,
+          instructions: [],
+        },
+      },
+    });
+    throws(() => sol.verifyTx(noSigners), /transaction requires a writable fee payer/);
+    throws(() => sol.verifyTx(readonlySigner), /transaction requires a writable fee payer/);
   });
   it('transaction rejects signature count mismatches', () => {
     const privateKey = new Uint8Array(32).fill(8);

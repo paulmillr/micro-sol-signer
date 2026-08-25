@@ -38,6 +38,34 @@ describe('Offchain messages', () => {
       ])
     );
   });
+  it('MessageRaw rejects malformed display preambles', () => {
+    const raw = (format: number, msg: Uint8Array) =>
+      concatBytes(
+        Uint8Array.of(0xff),
+        utf8.decode('solana offchain'),
+        Uint8Array.of(0, format, msg.length & 0xff, msg.length >>> 8),
+        msg
+      );
+    const malformed = [
+      ['ascii', 0, new Uint8Array()],
+      ['ascii', 0, utf8.decode('Approve\nTransfer 1000')],
+      ['ascii', 0, utf8.decode('é')],
+      ['ascii', 0, new Uint8Array(1213).fill(0x41)],
+      ['utf8', 1, new Uint8Array()],
+      ['utf8', 1, Uint8Array.of(0xc3, 0x28)],
+      ['utf8', 1, new Uint8Array(1213).fill(0x41)],
+      ['utf8ext', 2, new Uint8Array()],
+      ['utf8ext', 2, Uint8Array.of(0xed, 0xa0, 0x80)],
+      ['utf8ext', 2, new Uint8Array(65516).fill(0x41)],
+    ] as const;
+    for (const [format, tag, msg] of malformed) {
+      const value = { magic: undefined, version: { TAG: 0, data: { format, msg } } } as any;
+      const encoded = raw(tag, msg);
+      throws(() => sol.Offchain.MessageRaw.encode(value), /invalid message preamble/);
+      throws(() => sol.Offchain.MessageRaw.decode(encoded), /invalid message preamble/);
+      throws(() => sol.Offchain.Message.decode(encoded), /invalid message preamble/);
+    }
+  });
   it('Message round-trips long ascii messages', () => {
     const msg = '1'.repeat(1213);
     const raw = sol.Offchain.Message.encode({ version: 0, msg });
@@ -113,6 +141,30 @@ describe('Offchain messages', () => {
       );
       deepStrictEqual(sol.Offchain.verify(sig, pubKey2, msg), false);
     }
+  });
+  it('rejects low-order public-key signature forgeries', () => {
+    const publicKey = new Uint8Array(32);
+    publicKey[0] = 1; // Ed25519 identity point
+    const signature = new Uint8Array(64);
+    signature[0] = 1; // R = identity, S = 0
+    const encodedSignature = base58.encode(signature);
+
+    deepStrictEqual(sol.verifyBytes(encodedSignature, publicKey, utf8.decode('authorize')), false);
+    deepStrictEqual(sol.Offchain.verify(encodedSignature, publicKey, 'authorize'), false);
+
+    const tx = sol.TransactionRaw.encode({
+      signatures: [signature],
+      msg: {
+        TAG: 'legacy',
+        data: {
+          header: { requiredSignatures: 1, readSigned: 0, readUnsigned: 0 },
+          keys: [base58.encode(publicKey)],
+          blockhash: '11111111111111111111111111111111',
+          instructions: [],
+        },
+      },
+    });
+    throws(() => sol.verifyTx(tx), /invalid signature/);
   });
   it('signBytes', () => {
     // Compat with signBytes/verifySignature in @solana/kit

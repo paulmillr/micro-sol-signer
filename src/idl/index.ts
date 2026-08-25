@@ -118,17 +118,22 @@ const b58 = (): TRet<CoderType<string>> => {
 export const shortU16: TRet<CoderType<number>> = /* @__PURE__ */ deepFreeze(
   /* @__PURE__ */ P.wrap({
     encodeStream: (w: P.Writer, value: number) => {
-      if (!value) return w.byte(0);
-      for (; value; value >>= 7) {
-        w.bits(value > 0x7f ? 1 : 0, 1);
-        w.bits(value & 0x7f, 7);
-      }
+      if (!Number.isSafeInteger(value) || value < 0)
+        throw new RangeError('shortU16: expected a non-negative safe integer');
+      do {
+        const next = Math.floor(value / 128);
+        w.byte((value % 128) | (next ? 0x80 : 0));
+        value = next;
+      } while (value);
     },
     decodeStream: (r: P.Reader): number => {
       let len = 0;
       for (let pos = 0; !r.isEnd(); pos++) {
         const last = !r.bits(1);
-        len |= r.bits(7) << (pos * 7);
+        const next = len + r.bits(7) * 2 ** (pos * 7);
+        if (!Number.isSafeInteger(next))
+          throw new RangeError('shortU16: exceeds safe integer range');
+        len = next;
         if (last) break;
       }
       return len;
@@ -195,12 +200,22 @@ export function isOnCurve(bytes: TArg<Bytes | string>): boolean {
  * ```
  */
 export function programAddress(program: string, ...seeds: TArg<Bytes[]>): string {
+  const programBytes = base58.decode(program);
+  if (programBytes.length !== 32)
+    throw new RangeError('SOL.programAddress: program id must decode to 32 bytes');
+  // Solana allows 16 seeds in total; PDA search appends the bump as the final seed.
+  if (seeds.length > 15)
+    throw new RangeError('SOL.programAddress: expected at most 15 seeds before bump');
+  for (const seed of seeds) {
+    if (seed.length > 32)
+      throw new RangeError('SOL.programAddress: each seed must be at most 32 bytes');
+  }
   let seed = P.utils.concatBytes(...seeds);
   const noncePos = seed.length;
   seed = P.utils.concatBytes(
     seed,
     Uint8Array.of(0),
-    base58.decode(program),
+    programBytes,
     utf8.decode('ProgramDerivedAddress')
   );
   for (let i = 255; i >= 0; i--) {
@@ -1119,9 +1134,12 @@ export function parsePDAs<T extends ArrLike<PDAType>, DT extends DefinedTypes = 
       }
       throw new Error('unknown seed type');
     });
-    // PDA derivation is byte-order sensitive; keep declared seed order even for numeric-like names.
-    const coder = orderedStruct(fields);
-    res[p.name] = (value: any) => programAddress(program, coder.encode(value));
+    // Validate the complete declaration, including duplicate names, but encode every logical seed
+    // separately so Solana's per-seed limits and boundaries remain intact.
+    orderedStruct(fields);
+    const seedCoders = fields.map((field) => orderedStruct([field]));
+    res[p.name] = (value: any) =>
+      programAddress(program, ...seedCoders.map((coder) => coder.encode(value)));
   }
   return res as any;
 }
